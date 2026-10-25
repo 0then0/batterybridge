@@ -16,6 +16,7 @@ pub fn uninstall() -> Result<(), String> {
     }
     #[cfg(target_os = "macos")]
     {
+        super::startup::disable_for_uninstall()?;
         let script = include_str!("../../../packaging/macos/uninstall.sh");
         let quoted = script
             .replace('\\', "\\\\")

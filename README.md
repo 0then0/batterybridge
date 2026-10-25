@@ -57,6 +57,10 @@ Download the installer for your system above, open it in Finder, Explorer or you
 
 Use the system's app/package manager to remove Windows and Linux packages. On macOS, use **Uninstall BatteryBridge** in the app. See [installation](docs/install.md) for account permissions, updates, unsigned-package prompts and removal behavior.
 
+Source builds after v0.3.0 also include an optional **Launch at login** setting.
+It starts the GUI in the tray after sign-in, independently of the charging
+service. See [autostart requirements](docs/install.md#launch-at-login-next-release).
+
 ### Build from source
 
 Build the CLI and service with Rust 1.90 or newer:

@@ -31,9 +31,26 @@ Monitoring is available independently of controller activation. A laptop can rep
 
 Status and capability reads use local read-only discovery when the service is unavailable. `probe` always runs locally. Configuration reads and mutations require the service. Local discovery does not create a writable controller for the client.
 
-The native desktop app uses the same typed Rust client boundary as the CLI. IPC and export/uninstall work run outside the UI thread. Only one UI operation is in flight at a time; status refreshes preserve unsaved edits. The tray continues refreshing status every 30 seconds when the window is hidden. The independent daemon continues enforcing policy.
+The native desktop app uses the same typed Rust client boundary as the CLI. IPC and export/uninstall work run outside the UI thread. These operations run one at a time; status refreshes preserve unsaved edits. GUI login registration has its own worker and is serialized with uninstall. The tray continues refreshing status every 30 seconds when the window is hidden. The independent daemon continues enforcing policy.
 
-The app directly uses fastframe-shell (tray/window lifecycle), fastframe-tray, fastframe-fonts and fastframe-i18n (system language preferences). macOS additionally uses fastframe-dock to retain menu-bar application behavior. eframe supplies system theme following and user preference storage. Existing JSON translations remain the single catalog format for the app and macOS Installer; no gettext conversion or separate UI command protocol is required.
+The app directly uses fastframe-shell (tray/window lifecycle), fastframe-tray, fastframe-fonts, fastframe-i18n (system language preferences) and fastframe-autostart (per-user GUI login registration). macOS additionally uses fastframe-dock to retain menu-bar application behavior. eframe supplies system theme following and user preference storage. Existing JSON translations remain the single catalog format for the app and macOS Installer; no gettext conversion or separate UI command protocol is required.
+
+GUI autostart is independent of the charging service. Registration and OS-state
+queries run on a separate worker; they do not lock charging controls or replace
+unsaved policy drafts. The OS registration is authoritative, with no duplicate
+enabled flag in application settings. A login registration passes `--start-hidden`
+to fastframe-shell; a missing tray falls back to a normal window. Before a cold
+hidden launch, the app reads the saved language from eframe's existing RON file
+so that the first tray menu uses the selected language. On macOS 13+, a bundled
+SMAppService launch agent opens the app in the background; the package includes
+its plist before signing the app. The charging daemon remains a separate job.
+
+On macOS, closing a window into the tray cancels native destruction and hides it,
+keeping eframe's AppKit event loop running. Returning from `run_native` into the
+headless pump stops status-item clicks on macOS 15.7.9. The tray's Open action shows
+and focuses the retained window; Quit and closing without a working tray still
+allow native destruction. Windows and Linux retain the shell's existing window
+recreation lifecycle.
 
 ## Policy lifecycle
 

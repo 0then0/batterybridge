@@ -155,5 +155,12 @@
   "repeatBiweekly": "Alle zwei Wochen",
   "repeatMonthly": "Monatlich",
   "repeatYearly": "Jährlich",
-  "copyCommand": "Befehl kopieren: {action}"
+  "copyCommand": "Befehl kopieren: {action}",
+  "autostart": "Bei der Anmeldung starten",
+  "autostartHelp": "BatteryBridge nach der Anmeldung im Infobereich starten. Der Ladedienst läuft unabhängig davon.",
+  "autostartLoading": "Autostart-Einstellungen werden geprüft…",
+  "autostartUnsupported": "Autostart ist für diese Version oder dieses System nicht verfügbar.",
+  "autostartApproval": "Erlaube BatteryBridge unter Systemeinstellungen → Allgemein → Anmeldeobjekte, um die Einrichtung abzuschließen.",
+  "autostartWindow": "Das System startet die App derzeit mit einem Fenster. Schalte diese Option aus und wieder ein, um im Infobereich zu starten.",
+  "autostartError": "Autostart-Einstellungen konnten nicht geändert werden"
 }

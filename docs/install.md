@@ -52,6 +52,33 @@ The package installs the GUI, CLI, daemon and systemd unit, enables the service 
 
 Open **BatteryBridge** from your application menu. Remove it through the package manager: the service is stopped with an orderly hardware release, disabled and removed with the executables. Saved configuration in `/var/lib/batterybridge` is retained for reinstallation; it does not run background functions. Updates preserve this configuration and restart the service. Do not install both package formats on the same system. A manually installed unit at `/etc/systemd/system/batterybridge.service` overrides the packaged unit; the installer refuses this combination. Stop and remove that manual unit first using the service guide, then install the native package. Saved configuration is reused.
 
+## Launch at login (next release)
+
+This setting is available in source builds after v0.3.0. The v0.3.0 downloads do
+not include it yet.
+
+Enable **Launch at login** below the language selector to start BatteryBridge
+in the tray after signing in, without opening a window. It is off by default
+and applies to the current user. Open the window through the tray menu.
+If a tray cannot be created, the app opens a window instead.
+
+The charging service starts separately at system boot. This setting neither
+starts nor stops that service and remains available when charging settings
+are read-only. Quit exits the current GUI session; turn the setting off to
+prevent it from starting at the next sign-in.
+
+- **macOS:** requires macOS 13+ and the packaged `.app`, opened from Applications.
+  An unbundled executable or macOS 11/12 cannot register this login item.
+  If the app reports that approval is required, allow BatteryBridge in
+  **System Settings → General → Login Items**. The graphical uninstaller
+  unregisters the current user's GUI login item before removing the service.
+- **Windows:** registers the installed executable for the current account.
+  The packaged uninstaller removes matching entries in loaded user profiles.
+- **Linux:** registers an XDG desktop autostart entry for the current account.
+  Keep the executable at its registered path. Disable the setting before
+  package removal to remove this per-user entry; otherwise the entry remains
+  but cannot run the removed executable.
+
 ## Developer archives
 
 The archives contain standalone binaries and the platform's desktop bundles and packaging resources. Running a GUI extracted from an archive does not install its service. Use the native installer for ordinary installation, or follow [manual service setup](service.md).

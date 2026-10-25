@@ -235,6 +235,46 @@ fn status_card(ui: &mut egui::Ui, locale: &str, snapshot: Option<&Snapshot>, raw
     ui.add_space(22.0);
 }
 impl App {
+    fn startup_settings(&mut self, ui: &mut egui::Ui) {
+        use fastframe_autostart::{Start, State};
+        ui.add_space(16.0);
+        let mut enabled = self.startup_state.and_then(State::start).is_some();
+        let supported = self.startup_state.is_some_and(|s| s != State::Unsupported);
+        if ui
+            .add_enabled(
+                supported && !self.preview && !self.startup_busy && !self.confirm_uninstall,
+                egui::Checkbox::new(&mut enabled, self.text("autostart")),
+            )
+            .changed()
+        {
+            self.request_autostart(Some(enabled));
+        }
+        ui.label(self.text("autostartHelp"));
+        if self.startup_busy || self.startup_state.is_none() && self.startup_error.is_none() {
+            ui.horizontal(|ui| {
+                ui.spinner();
+                ui.label(self.text("autostartLoading"));
+            });
+        }
+        match self.startup_state {
+            Some(State::Unsupported) => {
+                ui.label(self.text("autostartUnsupported"));
+            }
+            Some(State::NeedsApproval(_)) => {
+                ui.label(self.text("autostartApproval"));
+            }
+            _ => {}
+        }
+        if matches!(
+            self.startup_state,
+            Some(State::On(Start::Window) | State::NeedsApproval(Start::Window))
+        ) {
+            ui.label(self.text("autostartWindow"));
+        }
+        if let Some(error) = &self.startup_error {
+            note(ui, Some(self.text("autostartError")), error.clone(), true);
+        }
+    }
     pub fn render(&mut self, outer: &mut egui::Ui) {
         egui::ScrollArea::vertical()
             .auto_shrink([false, false])
@@ -392,6 +432,7 @@ impl App {
                             if before != self.language {
                                 self.language_changed();
                             }
+                            self.startup_settings(ui);
                             if platform::can_uninstall() && !self.preview {
                                 ui.add_space(16.0);
                                 ui.separator();
@@ -403,7 +444,13 @@ impl App {
                                     if button(ui, self.text("cancel"), !self.busy).clicked() {
                                         self.confirm_uninstall = false;
                                     }
-                                } else if button(ui, self.text("uninstall"), !self.busy).clicked() {
+                                } else if button(
+                                    ui,
+                                    self.text("uninstall"),
+                                    !self.busy && !self.startup_busy,
+                                )
+                                .clicked()
+                                {
                                     self.confirm_uninstall = true;
                                 }
                             }
@@ -683,9 +730,123 @@ mod tests {
                     std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("tests/status.json"),
                 ),
                 language: Some("en".into()),
+                ..Default::default()
             },
         )
         .unwrap()
+    }
+
+    #[test]
+    fn startup_control_remains_available_without_service_access_and_during_ipc() {
+        use egui::accesskit::Action;
+        use fastframe_autostart::{Start, State};
+        for mode in [
+            "read-only",
+            "busy",
+            "preview",
+            "unsupported",
+            "loading",
+            "uninstall",
+        ] {
+            let ctx = egui::Context::default();
+            ctx.enable_accesskit();
+            let mut app = policy_app();
+            app.preview = mode == "preview";
+            app.busy = mode == "busy";
+            app.model.snapshot.as_mut().unwrap().config = None;
+            app.startup_state = Some(if mode == "unsupported" {
+                State::Unsupported
+            } else {
+                State::Off
+            });
+            app.startup_busy = mode == "loading";
+            app.confirm_uninstall = mode == "uninstall";
+            app.startup_query = |enabled| {
+                assert_eq!(enabled, Some(true));
+                Ok(State::On(Start::Hidden))
+            };
+            let frame = |app: &mut App, events| {
+                let mut output = ctx.run_ui(
+                    RawInput {
+                        events,
+                        ..Default::default()
+                    },
+                    |ui| {
+                        app.startup_settings(ui);
+                    },
+                );
+                output.textures_delta.clear();
+                output.platform_output.accesskit_update.take().unwrap()
+            };
+            let tree = frame(&mut app, vec![]);
+            let (id, node) = tree
+                .nodes
+                .iter()
+                .find(|(_, n)| n.label() == Some("Launch at login"))
+                .unwrap();
+            let writable = matches!(mode, "read-only" | "busy");
+            assert_eq!(!node.is_disabled(), writable, "{mode}");
+            if writable {
+                frame(&mut app, action(*id, Action::Click, None));
+                assert!(app.startup_busy);
+                let reply = app
+                    .replies
+                    .recv_timeout(std::time::Duration::from_secs(5))
+                    .unwrap();
+                app.sender.send(reply).unwrap();
+                app.events(&ctx, true);
+                assert_eq!(app.startup_state, Some(State::On(Start::Hidden)));
+                assert_eq!(app.busy, mode == "busy");
+            } else if mode == "uninstall" {
+                app.request_autostart(Some(true));
+                assert!(
+                    !app.startup_busy,
+                    "registration must not race uninstallation"
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn startup_messages_fit_all_languages_at_minimum_width() {
+        use fastframe_autostart::{Start, State};
+        let ctx = egui::Context::default();
+        fastframe_fonts::FontSetup::default().install(&ctx);
+        style(&ctx);
+        let mut app = policy_app();
+        for (locale, _) in i18n::LANGUAGES {
+            app.locale = locale.into();
+            for state in [
+                None,
+                Some(State::Unsupported),
+                Some(State::Off),
+                Some(State::NeedsApproval(Start::Hidden)),
+                Some(State::On(Start::Window)),
+            ] {
+                app.startup_state = state;
+                app.startup_error = Some("Startup registration failed".into());
+                let mut output = ctx.run_ui(
+                    RawInput {
+                        screen_rect: Some(Rect::from_min_size(
+                            egui::Pos2::ZERO,
+                            vec2(320.0, 730.0),
+                        )),
+                        ..Default::default()
+                    },
+                    |root| {
+                        egui::CentralPanel::default().show(root, |ui| {
+                            app.startup_settings(ui);
+                            assert!(
+                                ui.min_rect().width() <= 321.0,
+                                "{locale}: {:?}",
+                                ui.min_rect()
+                            );
+                        });
+                    },
+                );
+                output.textures_delta.clear();
+            }
+        }
     }
 
     #[test]
@@ -848,6 +1009,7 @@ mod tests {
                     std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("tests/status.json"),
                 ),
                 language: None,
+                ..Default::default()
             },
         )
         .unwrap();

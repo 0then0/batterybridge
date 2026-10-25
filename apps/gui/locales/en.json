@@ -155,5 +155,12 @@
   "repeatBiweekly": "Every two weeks",
   "repeatMonthly": "Monthly",
   "repeatYearly": "Yearly",
-  "copyCommand": "Copy command: {action}"
+  "copyCommand": "Copy command: {action}",
+  "autostart": "Launch at login",
+  "autostartHelp": "Start BatteryBridge in the tray when you sign in. The charging service runs independently.",
+  "autostartLoading": "Checking startup settings…",
+  "autostartUnsupported": "Autostart is unavailable for this build or system.",
+  "autostartApproval": "Allow BatteryBridge in System Settings → General → Login Items to complete setup.",
+  "autostartWindow": "The system currently starts the app with its window. Turn this option off and on to switch to the tray.",
+  "autostartError": "Could not update startup settings"
 }

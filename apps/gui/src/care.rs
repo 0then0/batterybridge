@@ -580,6 +580,7 @@ mod tests {
                     std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("tests/status.json"),
                 ),
                 language: Some("en".into()),
+                ..Default::default()
             },
         )
         .unwrap()

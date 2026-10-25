@@ -155,5 +155,12 @@
   "repeatBiweekly": "2週間ごと",
   "repeatMonthly": "毎月",
   "repeatYearly": "毎年",
-  "copyCommand": "コマンドをコピー：{action}"
+  "copyCommand": "コマンドをコピー：{action}",
+  "autostart": "ログイン時に起動",
+  "autostartHelp": "ログイン時にBatteryBridgeをトレイで起動します。充電サービスは独立して動作します。",
+  "autostartLoading": "自動起動の設定を確認中…",
+  "autostartUnsupported": "このビルドまたはシステムでは自動起動を利用できません。",
+  "autostartApproval": "システム設定 → 一般 → ログイン項目でBatteryBridgeを許可して設定を完了してください。",
+  "autostartWindow": "現在、システムはアプリのウィンドウを開いて起動します。トレイで起動するには、この設定を一度オフにしてからオンにしてください。",
+  "autostartError": "自動起動の設定を変更できませんでした"
 }

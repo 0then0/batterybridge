@@ -8,11 +8,15 @@ import tempfile
 import unittest
 from pathlib import Path
 from xml.etree import ElementTree as ET
+from unittest.mock import patch
 
 HERE = Path(__file__).resolve().parents[1]
 spec = importlib.util.spec_from_file_location("build_pkg", HERE / "build-pkg.py")
 builder = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(builder)
+spec = importlib.util.spec_from_file_location("build_universal", HERE / "build-universal.py")
+universal = importlib.util.module_from_spec(spec)
+spec.loader.exec_module(universal)
 
 
 class InstallerTests(unittest.TestCase):
@@ -77,6 +81,29 @@ class InstallerTests(unittest.TestCase):
         self.assertEqual((payload / builder.HELPERS / builder.SERVICE).stat().st_mode & 0o777, 0o755)
         self.assertTrue((payload / "Applications/BatteryBridge.app/Contents/Info.plist").is_file())
         self.assertFalse((payload / "Library/Application Support/BatteryBridge/config.toml").exists())
+
+    def test_hidden_login_agent_is_inside_bundle_before_signing(self):
+        build = self.root / "build"
+        build.mkdir()
+        (build / "batterybridge-gui").write_text("fixture")
+        def sign(command, **kwargs):
+            self.assertEqual(command[:4], ["codesign", "--force", "--sign", "-"])
+            app = Path(command[4]) / "Contents"
+            agent = plistlib.loads((app / "Library/LaunchAgents/io.github.batterybridge.autostart.plist").read_bytes())
+            self.assertEqual(agent["Label"], "io.github.batterybridge.autostart")
+            self.assertEqual(agent["ProgramArguments"], ["/usr/bin/open", "-g", "-b", "io.github.batterybridge", "--args", "--start-hidden"])
+            self.assertTrue(agent["RunAtLoad"])
+            self.assertNotIn("KeepAlive", agent)
+            self.assertEqual(agent["LimitLoadToSessionType"], "Aqua")
+        with patch.object(universal.subprocess, "run", side_effect=sign) as signer:
+            app = universal.bundle(build)
+        signer.assert_called_once()
+        payload = self.root / "payload"
+        for name in ("batterybridge", "batterybridge-service"):
+            (build / name).write_text("fixture")
+        builder.stage_payload(payload, build)
+        relative = Path("Contents/Library/LaunchAgents/io.github.batterybridge.autostart.plist")
+        self.assertEqual((payload / "Applications/BatteryBridge.app" / relative).read_bytes(), (app / relative).read_bytes())
 
     def test_distribution_targets_current_system_and_both_mac_architectures(self):
         root = ET.fromstring(builder.distribution("0.1.0.1"))

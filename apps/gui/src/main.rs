@@ -4,6 +4,7 @@ mod care;
 mod i18n;
 mod model;
 mod platform;
+mod startup;
 mod view;
 
 use batterybridge_protocol::{Command, Response};
@@ -26,16 +27,19 @@ const APP_ID: &str = "io.github.batterybridge";
 struct Options {
     preview: Option<PathBuf>,
     language: Option<String>,
+    start_hidden: bool,
 }
 impl Options {
     fn parse() -> Result<Option<Self>, String> {
+        Self::parse_args(std::env::args().skip(1))
+    }
+    fn parse_args(mut args: impl Iterator<Item = String>) -> Result<Option<Self>, String> {
         let mut options = Self::default();
-        let mut args = std::env::args().skip(1);
         while let Some(arg) = args.next() {
             match arg.as_str() {
                 "--help" | "-h" => {
                     println!(
-                        "BatteryBridge\nUsage: batterybridge-gui [--preview SNAPSHOT.json [--language LOCALE]]"
+                        "BatteryBridge\nUsage: batterybridge-gui [--start-hidden] [--preview SNAPSHOT.json [--language LOCALE]]"
                     );
                     return Ok(None);
                 }
@@ -50,6 +54,7 @@ impl Options {
                 "--language" => {
                     options.language = Some(args.next().ok_or("--language needs a locale")?)
                 }
+                fastframe_autostart::START_HIDDEN => options.start_hidden = true,
                 _ => return Err(format!("Unknown argument: {arg}")),
             }
         }
@@ -71,6 +76,7 @@ impl Options {
 
 enum Reply {
     Protocol(Result<Response, String>),
+    Autostart(Result<fastframe_autostart::State, String>),
     Uninstalled(Result<(), String>),
     Saved(Result<(), String>),
 }
@@ -80,6 +86,10 @@ pub(crate) struct App {
     language: String,
     locale: String,
     preferences_loaded: bool,
+    startup_state: Option<fastframe_autostart::State>,
+    startup_busy: bool,
+    startup_error: Option<String>,
+    startup_query: fn(Option<bool>) -> Result<fastframe_autostart::State, String>,
     tray: Option<Tray>,
     waker: Waker,
     sender: mpsc::Sender<Reply>,
@@ -110,7 +120,10 @@ impl App {
                     .map_err(|e| e.to_string())?,
             );
         }
-        let language = options.language.unwrap_or_else(|| "system".into());
+        let language = options
+            .language
+            .or_else(|| (!preview).then(startup::saved_language).flatten())
+            .unwrap_or_else(|| "system".into());
         let locale = i18n::resolve(&language, fastframe_i18n::system_languages()).to_owned();
         let tray = if preview {
             None
@@ -139,6 +152,10 @@ impl App {
             language,
             locale,
             preferences_loaded: preview,
+            startup_state: preview.then_some(fastframe_autostart::State::Off),
+            startup_busy: false,
+            startup_error: None,
+            startup_query: startup::query,
             tray,
             waker,
             sender,
@@ -194,6 +211,25 @@ impl App {
             }
         }
         self.refreshed = Instant::now() - REFRESH;
+        if self.startup_state.is_none() {
+            self.request_autostart(None);
+        }
+    }
+    fn request_autostart(&mut self, enabled: Option<bool>) {
+        if self.preview || self.startup_busy || self.confirm_uninstall {
+            return;
+        }
+        self.startup_busy = true;
+        self.startup_error = None;
+        let sender = self.sender.clone();
+        let waker = self.waker.clone();
+        let query = self.startup_query;
+        std::thread::spawn(move || {
+            let result = std::panic::catch_unwind(move || query(enabled))
+                .unwrap_or_else(|_| Err("Startup operation failed".into()));
+            let _ = sender.send(Reply::Autostart(result));
+            waker.wake();
+        });
     }
     fn spawn(&mut self, job: impl FnOnce() -> Reply + Send + std::panic::UnwindSafe + 'static) {
         if self.busy {
@@ -266,10 +302,48 @@ impl App {
             tray.set_enabled("resume", writable);
         }
     }
+    fn show_window(&mut self, ctx: &egui::Context, window_exists: bool) {
+        if window_exists {
+            #[cfg(target_os = "macos")]
+            {
+                self.hide = false;
+                ctx.send_viewport_cmd(egui::ViewportCommand::Visible(true));
+            }
+            ctx.send_viewport_cmd(egui::ViewportCommand::Minimized(false));
+            ctx.send_viewport_cmd(egui::ViewportCommand::Focus);
+        } else {
+            self.wants_show = true;
+        }
+    }
+    fn handle_close_requested(&mut self, ctx: &egui::Context, tray_shown: bool) {
+        self.hide = tray_shown && !self.quit;
+        #[cfg(target_os = "macos")]
+        if self.hide {
+            // Ending run_native leaves the status item in fastframe's headless
+            // AppKit pump, where clicks stop arriving on macOS 15.7.9. Keep winit's
+            // native event loop alive while the window is hidden instead.
+            ctx.send_viewport_cmd(egui::ViewportCommand::CancelClose);
+            ctx.send_viewport_cmd(egui::ViewportCommand::Visible(false));
+        }
+        #[cfg(not(target_os = "macos"))]
+        let _ = ctx;
+    }
     fn events(&mut self, ctx: &egui::Context, visible: bool) {
         while let Ok(reply) = self.replies.try_recv() {
-            self.busy = false;
+            if !matches!(&reply, Reply::Autostart(_)) {
+                self.busy = false;
+            }
             match reply {
+                Reply::Autostart(result) => {
+                    self.startup_busy = false;
+                    match result {
+                        Ok(state) => {
+                            self.startup_state = Some(state);
+                            self.startup_error = None;
+                        }
+                        Err(error) => self.startup_error = Some(error),
+                    }
+                }
                 Reply::Protocol(Ok(Response::Status(snapshot))) => {
                     self.model.accept(*snapshot);
                     self.tray_status();
@@ -323,12 +397,7 @@ impl App {
             match event {
                 Event::Menu("quit") => self.quit = true,
                 Event::Toggle | Event::Show | Event::Menu("open") => {
-                    if visible {
-                        ctx.send_viewport_cmd(egui::ViewportCommand::Minimized(false));
-                        ctx.send_viewport_cmd(egui::ViewportCommand::Focus);
-                    } else {
-                        self.wants_show = true;
-                    }
+                    self.show_window(ctx, visible);
                 }
                 Event::Menu("topup") => self.request(Command::TopUp),
                 Event::Menu("pause") => self.request(Command::Pause),
@@ -342,6 +411,18 @@ impl App {
     }
 }
 impl Resident for App {
+    fn start_hidden(&mut self) -> bool {
+        let Some(tray) = self.tray.as_mut() else {
+            return false;
+        };
+        tray.create_item();
+        if !tray.is_shown() {
+            return false;
+        }
+        #[cfg(target_os = "macos")]
+        fastframe_dock::set_dock_icon_visible(false);
+        true
+    }
     fn closed(&self) -> Closed {
         if self.hide && !self.quit {
             Closed::Hide
@@ -376,9 +457,13 @@ impl eframe::App for Window {
     fn logic(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
         self.app.events(ctx, true);
         if ctx.input(|i| i.viewport().close_requested()) {
-            self.app.hide = self.app.tray.as_ref().is_some_and(Tray::is_shown) && !self.app.quit;
+            let tray_shown = self.app.tray.as_ref().is_some_and(Tray::is_shown);
+            self.app.handle_close_requested(ctx, tray_shown);
         }
         let focused = ctx.input(|i| i.viewport().focused.unwrap_or(false));
+        if !self.app.preview && focused && !self.focused {
+            self.app.request_autostart(None);
+        }
         if !self.app.preview
             && !self.app.busy
             && (self.app.refreshed.elapsed() >= REFRESH || focused && !self.focused)
@@ -444,9 +529,10 @@ fn run() -> Result<(), String> {
         return Ok(());
     };
     let preview = options.preview.is_some();
+    let start_hidden = options.start_hidden;
     let waker = Waker::default();
     let app = App::new(waker.clone(), options)?;
-    let shell = Shell::new(app, &waker);
+    let shell = Shell::new(app, &waker).start_hidden(start_hidden);
     #[cfg(target_os = "macos")]
     let shell = shell.idle(fastframe_tray::idle);
     shell
@@ -508,6 +594,7 @@ mod tests {
             Options {
                 preview: Some(PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("tests/status.json")),
                 language: Some("ru".into()),
+                ..Default::default()
             },
         )
         .unwrap()
@@ -528,6 +615,81 @@ mod tests {
             app.request(command);
             assert!(!app.busy);
         }
+        assert!(
+            !app.start_hidden(),
+            "without a tray, hidden startup must open a window"
+        );
+        app.request_autostart(Some(true));
+        assert!(!app.startup_busy);
+        assert_eq!(app.startup_state, Some(fastframe_autostart::State::Off));
+    }
+
+    #[test]
+    fn startup_argument_is_optional_and_preview_keeps_its_safety_boundary() {
+        fn parse(args: &[&str]) -> Result<Option<Options>, String> {
+            Options::parse_args(args.iter().map(|s| (*s).into()))
+        }
+        assert!(!parse(&[]).unwrap().unwrap().start_hidden);
+        assert!(parse(&["--start-hidden"]).unwrap().unwrap().start_hidden);
+        let options = parse(&[
+            "--start-hidden",
+            "--preview",
+            "snapshot.json",
+            "--language",
+            "ru",
+        ])
+        .unwrap()
+        .unwrap();
+        assert!(options.start_hidden);
+        assert_eq!(options.language.as_deref(), Some("ru"));
+        assert_eq!(options.preview, Some(PathBuf::from("snapshot.json")));
+        assert!(parse(&["--unknown"]).is_err());
+    }
+
+    #[test]
+    fn startup_worker_is_independent_of_charging_permissions_and_inflight_requests() {
+        use fastframe_autostart::{Start, State};
+        let mut app = preview();
+        app.preview = false;
+        app.model.snapshot.as_mut().unwrap().config = None;
+        app.busy = true;
+        app.model.stop = 85;
+        app.model.edited = true;
+        app.model.error = Some("battery request failed".into());
+        app.startup_query = |enabled| {
+            assert_eq!(enabled, Some(true));
+            Ok(State::NeedsApproval(Start::Hidden))
+        };
+        app.request_autostart(Some(true));
+        assert!(app.startup_busy);
+        // A second click cannot race the first registration.
+        app.request_autostart(Some(false));
+        let reply = app.replies.recv_timeout(Duration::from_secs(5)).unwrap();
+        app.sender.send(reply).unwrap();
+        app.events(&egui::Context::default(), true);
+        assert!(!app.startup_busy);
+        assert!(
+            app.busy,
+            "an autostart reply must not complete a charging request"
+        );
+        assert_eq!(app.startup_state, Some(State::NeedsApproval(Start::Hidden)));
+        assert!(app.startup_error.is_none());
+        assert_eq!(app.model.stop, 85);
+        assert!(app.model.edited);
+        assert_eq!(app.model.error.as_deref(), Some("battery request failed"));
+
+        app.startup_query = |_| Err("OS denied startup registration".into());
+        app.request_autostart(Some(false));
+        let reply = app.replies.recv_timeout(Duration::from_secs(5)).unwrap();
+        app.sender.send(reply).unwrap();
+        app.events(&egui::Context::default(), true);
+        assert!(!app.startup_busy);
+        assert!(app.busy);
+        assert_eq!(app.startup_state, Some(State::NeedsApproval(Start::Hidden)));
+        assert_eq!(
+            app.startup_error.as_deref(),
+            Some("OS denied startup registration")
+        );
     }
 
     #[test]
@@ -580,6 +742,75 @@ mod tests {
                 assert_eq!(app.model.care.heat_limit_c, Some(35));
             }
         }
+    }
+    #[test]
+    fn closing_and_reopening_from_tray_preserves_drafts_and_native_lifecycle() {
+        use egui::ViewportCommand::{CancelClose, Close, Focus, Minimized, Visible};
+        let mut app = preview();
+        app.model.stop = 85;
+        app.model.edited = true;
+        let ctx = egui::Context::default();
+        for _ in 0..3 {
+            let mut hidden = ctx.run_ui(Default::default(), |ui| {
+                app.handle_close_requested(ui.ctx(), true);
+            });
+            hidden.textures_delta.clear();
+            let commands = &hidden.viewport_output[&egui::ViewportId::ROOT].commands;
+            assert!(app.hide);
+            assert!(!commands.contains(&Close));
+            if cfg!(target_os = "macos") {
+                assert!(commands.contains(&CancelClose));
+                assert!(commands.contains(&Visible(false)));
+            } else {
+                assert!(!commands.contains(&CancelClose));
+                assert!(!commands.contains(&Visible(false)));
+                assert!(matches!(app.closed(), Closed::Hide));
+                app.window_gone();
+            }
+            let mut shown = ctx.run_ui(Default::default(), |ui| app.show_window(ui.ctx(), true));
+            shown.textures_delta.clear();
+            let commands = &shown.viewport_output[&egui::ViewportId::ROOT].commands;
+            let expected = if cfg!(target_os = "macos") {
+                vec![Visible(true), Minimized(false), Focus]
+            } else {
+                vec![Minimized(false), Focus]
+            };
+            assert_eq!(commands, &expected);
+            assert!(!app.hide);
+            assert!(!app.wants_show);
+            assert_eq!(app.model.stop, 85);
+            assert!(app.model.edited);
+        }
+    }
+    #[test]
+    fn close_without_tray_and_explicit_quit_are_not_cancelled() {
+        for (tray_shown, quit) in [(false, false), (true, true)] {
+            let mut app = preview();
+            app.quit = quit;
+            let mut output = egui::Context::default().run_ui(Default::default(), |ui| {
+                app.handle_close_requested(ui.ctx(), tray_shown);
+            });
+            output.textures_delta.clear();
+            let commands = &output.viewport_output[&egui::ViewportId::ROOT].commands;
+            assert!(!commands.contains(&egui::ViewportCommand::CancelClose));
+            assert!(!commands.contains(&egui::ViewportCommand::Visible(false)));
+            assert!(!app.hide);
+            assert!(matches!(app.closed(), Closed::Quit));
+        }
+    }
+    #[test]
+    fn show_without_an_existing_window_uses_shell_recreation_once() {
+        let mut app = preview();
+        app.show_window(&egui::Context::default(), false);
+        assert!(matches!(
+            app.headless_frame(&egui::Context::default()),
+            Headless::Show
+        ));
+        app.window_gone();
+        assert!(matches!(
+            app.headless_frame(&egui::Context::default()),
+            Headless::WaitFor(_)
+        ));
     }
     #[test]
     fn closing_without_a_tray_quits_and_quit_overrides_hide() {

@@ -34,6 +34,10 @@ def bundle(build):
         'NSHighResolutionCapable': True, 'NSPrincipalClass': 'NSApplication',
     }
     (app / 'Info.plist').write_bytes(plistlib.dumps(info))
+    agents = app / 'Library/LaunchAgents'
+    agents.mkdir(parents=True)
+    shutil.copy2(REPO / 'packaging/launchd/io.github.batterybridge.autostart.plist',
+                 agents / 'io.github.batterybridge.autostart.plist')
     subprocess.run(['codesign', '--force', '--sign', '-', str(app.parent)], check=True)
     return app.parent
 

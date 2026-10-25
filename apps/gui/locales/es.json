@@ -155,5 +155,12 @@
   "repeatBiweekly": "Cada dos semanas",
   "repeatMonthly": "Mensualmente",
   "repeatYearly": "Anualmente",
-  "copyCommand": "Copiar comando: {action}"
+  "copyCommand": "Copiar comando: {action}",
+  "autostart": "Iniciar al iniciar sesión",
+  "autostartHelp": "Iniciar BatteryBridge en la bandeja al iniciar sesión. El servicio de carga funciona de forma independiente.",
+  "autostartLoading": "Comprobando el inicio automático…",
+  "autostartUnsupported": "El inicio automático no está disponible en esta versión o sistema.",
+  "autostartApproval": "Permite BatteryBridge en Ajustes del Sistema → General → Ítems de inicio para completar la configuración.",
+  "autostartWindow": "El sistema abre actualmente la ventana de la aplicación. Desactiva y vuelve a activar esta opción para iniciar en la bandeja.",
+  "autostartError": "No se pudo configurar el inicio automático"
 }

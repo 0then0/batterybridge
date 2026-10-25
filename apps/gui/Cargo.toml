@@ -15,12 +15,14 @@ batterybridge-ipc.workspace = true
 batterybridge-platform.workspace = true
 serde.workspace = true
 serde_json.workspace = true
+ron = "=0.12.2"
 eframe = { version = "=0.36.2", default-features = false, features = ["glow", "wayland", "x11", "default_fonts", "accesskit", "persistence"] }
 egui = { version = "=0.36.2", features = ["serde"] }
 fastframe-shell = { git = "https://github.com/crmne/fastframe", tag = "v0.14.1" }
 fastframe-tray = { git = "https://github.com/crmne/fastframe", tag = "v0.14.1" }
 fastframe-fonts = { git = "https://github.com/crmne/fastframe", tag = "v0.14.1" }
 fastframe-i18n = { git = "https://github.com/crmne/fastframe", tag = "v0.14.1" }
+fastframe-autostart = { git = "https://github.com/crmne/fastframe", tag = "v0.14.1" }
 
 [target.'cfg(target_os = "macos")'.dependencies]
 fastframe-dock = { git = "https://github.com/crmne/fastframe", tag = "v0.14.1" }

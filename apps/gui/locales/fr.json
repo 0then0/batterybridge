@@ -155,5 +155,12 @@
   "repeatBiweekly": "Toutes les deux semaines",
   "repeatMonthly": "Chaque mois",
   "repeatYearly": "Chaque année",
-  "copyCommand": "Copier la commande : {action}"
+  "copyCommand": "Copier la commande : {action}",
+  "autostart": "Lancer à l’ouverture de session",
+  "autostartHelp": "Lancer BatteryBridge dans la zone de notification à l’ouverture de session. Le service de charge fonctionne indépendamment.",
+  "autostartLoading": "Vérification du démarrage automatique…",
+  "autostartUnsupported": "Le démarrage automatique n’est pas disponible pour cette version ou ce système.",
+  "autostartApproval": "Autorisez BatteryBridge dans Réglages Système → Général → Ouverture pour terminer la configuration.",
+  "autostartWindow": "Le système ouvre actuellement la fenêtre de l’application. Désactivez puis réactivez cette option pour démarrer dans la zone de notification.",
+  "autostartError": "Impossible de modifier le démarrage automatique"
 }

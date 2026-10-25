@@ -34,6 +34,12 @@ $task = Get-ScheduledTask -TaskName 'BatteryBridge'
 if ($task.Principal.UserId -notin @('SYSTEM','S-1-5-18')) { throw 'Task must run as SYSTEM' }
 & "$PSScriptRoot/test-gui.ps1" -Executable (Join-Path $installed 'batterybridge-gui.exe')
 Get-Process batterybridge-gui -ErrorAction SilentlyContinue | Stop-Process -Force
+$run = 'HKCU:\Software\Microsoft\Windows\CurrentVersion\Run'
+New-Item -Path $run -Force | Out-Null
+New-ItemProperty -Path $run -Name BatteryBridge -Value ('"' + (Join-Path $installed 'batterybridge-gui.exe') + '" --start-hidden') -PropertyType String -Force | Out-Null
+$approval = 'HKCU:\Software\Microsoft\Windows\CurrentVersion\Explorer\StartupApproved\Run'
+New-Item -Path $approval -Force | Out-Null
+New-ItemProperty -Path $approval -Name BatteryBridge -Value ([byte[]](3,0,0,0,0,0,0,0,0,0,0,0)) -PropertyType Binary -Force | Out-Null
 Invoke-Installer -FilePath (Join-Path $installed 'uninstall.exe')
 # NSIS copies its uninstaller to a temporary child process before removing itself.
 # Wait for that child's observable result as well as the original process exit.
@@ -44,4 +50,6 @@ while ((Test-Path (Join-Path $installed 'service/batterybridge-service.exe')) -a
 if (Get-ScheduledTask -TaskName 'BatteryBridge' -ErrorAction SilentlyContinue) { throw 'Background task survived removal' }
 if (Test-Path (Join-Path $installed 'service/batterybridge-service.exe')) { throw 'Daemon executable survived removal' }
 if (Test-Path (Join-Path $env:ProgramData 'BatteryBridge')) { throw 'Saved settings survived removal' }
+if (Get-ItemProperty -Path $run -Name BatteryBridge -ErrorAction SilentlyContinue) { throw 'GUI autostart survived removal' }
+if (Get-ItemProperty -Path $approval -Name BatteryBridge -ErrorAction SilentlyContinue) { throw 'GUI startup approval record survived removal' }
 Write-Output 'Windows NSIS install / IPC / uninstall integration: passed'
