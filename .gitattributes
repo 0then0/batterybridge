@@ -1,4 +1,21 @@
 * text=auto eol=lf
+*.rs text diff=rust
+*.md text
+*.toml text
+*.json text
+*.yml text
+*.yaml text
+*.sh text
+*.ps1 text
 *.png binary
 *.ico binary
 *.icns binary
+*.woff2 binary
+*.ttf binary
+*.otf binary
+*.zip binary
+*.gz binary
+*.pkg binary
+*.deb binary
+*.rpm binary
+*.exe binary

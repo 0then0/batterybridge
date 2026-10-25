@@ -2,7 +2,7 @@
 
 [Documentation index](README.md)
 
-Version 0.3.0 uses egui/eframe and preserves the installation paths and saved
+Versions 0.3.x use egui/eframe and preserves the installation paths and saved
 charging policy. The installers include the GUI, CLI and background service.
 Upgrade all three together: the IPC protocol is incompatible with 0.2.0.
 Back up configuration before upgrading; the migrated version 2 format cannot be
@@ -52,10 +52,9 @@ The package installs the GUI, CLI, daemon and systemd unit, enables the service 
 
 Open **BatteryBridge** from your application menu. Remove it through the package manager: the service is stopped with an orderly hardware release, disabled and removed with the executables. Saved configuration in `/var/lib/batterybridge` is retained for reinstallation; it does not run background functions. Updates preserve this configuration and restart the service. Do not install both package formats on the same system. A manually installed unit at `/etc/systemd/system/batterybridge.service` overrides the packaged unit; the installer refuses this combination. Stop and remove that manual unit first using the service guide, then install the native package. Saved configuration is reused.
 
-## Launch at login (next release)
+## Launch at login
 
-This setting is available in source builds after v0.3.0. The v0.3.0 downloads do
-not include it yet.
+Available starting with v0.3.1. Earlier releases do not include this setting.
 
 Enable **Launch at login** below the language selector to start BatteryBridge
 in the tray after signing in, without opening a window. It is off by default

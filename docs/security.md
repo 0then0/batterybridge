@@ -2,6 +2,9 @@
 
 [Documentation index](README.md)
 
+For supported versions and private vulnerability reporting, see the
+[security policy](../SECURITY.md). This guide describes the implementation boundary.
+
 ## Privilege boundary
 
 The background service owns the writable charge controller and machine-wide policy. CLI and GUI run as ordinary applications. They request a fixed set of operations: status, capabilities, compatibility reports, configuration reads, validated limits, temporary charging operations, bounded discharge, calibration and calendar care settings.

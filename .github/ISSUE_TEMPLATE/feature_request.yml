@@ -1,0 +1,23 @@
+name: Feature request
+description: Describe a user problem or a missing device capability.
+title: "feat: "
+body:
+  - type: textarea
+    id: problem
+    attributes:
+      label: What problem should this solve?
+      description: Describe the task, affected platform and current limitation.
+    validations:
+      required: true
+  - type: textarea
+    id: behavior
+    attributes:
+      label: Proposed behavior
+      description: Explain the desired result and any alternatives you have tried.
+    validations:
+      required: true
+  - type: textarea
+    id: hardware
+    attributes:
+      label: Hardware requirements or references
+      description: For device support, include a model, public interface documentation and reviewed capability reports. Do not include serials or other private identifiers.

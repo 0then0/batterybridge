@@ -32,9 +32,9 @@ Download an artifact from the completed workflow run and extract its archive. Gi
 
 ## Prepare a release
 
-Maintainers should verify the selected commit's CI results, review release notes in `packaging/macos/RELEASE.md` and compatibility information before creating a version tag. Pushing a `v*` tag builds all three platforms and publishes a GitHub Release only after every build succeeds. Tags containing a hyphen, such as `v0.1.0-dev.1`, create pre-releases. Manual workflow dispatch builds artifacts without publishing.
+Maintainers should verify the selected commit's CI results, review the current version entry in [CHANGELOG.md](../CHANGELOG.md) and compatibility information before creating a version tag. Pushing a `v*` tag builds all three platforms and publishes a GitHub Release only after every build succeeds. Tags containing a hyphen, such as `v0.1.0-dev.1`, create pre-releases. Manual workflow dispatch builds artifacts without publishing.
 
-Application version comes from the root `Cargo.toml`; numeric macOS build and receipt metadata come from `packaging/app.py`. Release 0.3.0 uses bundle build 5 and receipt 0.3.0.5. Version 0.2.0 was the last release of the previous GUI. Keep the version, release tag and Cargo lockfile metadata consistent. The workflow generates an outer `SHA256SUMS.txt` covering downloadable packages and archives.
+Application version comes from the root `Cargo.toml`; numeric macOS build and receipt metadata come from `packaging/app.py`. Release 0.3.1 uses bundle build 6 and receipt 0.3.1.6. Version 0.2.0 was the last release of the previous GUI. Keep the version, release tag and Cargo lockfile metadata consistent. Update the README download links, installation guide and changelog before tagging. CI must pass for the selected commit. The release workflow rejects a tag that differs from the Cargo version and takes the release body from its dated changelog entry. The workflow generates an outer `SHA256SUMS.txt` covering downloadable packages and archives.
 
 Keep CLI, GUI and service versions together when distributing a build. Protocol-incompatible components reject requests explicitly.
 

@@ -11,7 +11,7 @@ BatteryBridge is a battery charge-control tool for Linux, macOS and Windows. It 
 
 Available controls depend on your laptop's kernel driver, firmware and vendor interfaces. BatteryBridge detects these capabilities and explains which features are available on your device.
 
-**Stable release:** 0.3.0, with a native Rust GUI and extended battery-care controls. CI tests and builds the project on all three operating systems. Apple SMC and Lenovo WMI charge control remain experimental and require device-level validation; see [hardware compatibility](docs/hardware.md) for the current support boundaries.
+**Stable release:** 0.3.1, with optional GUI autostart and reliable macOS tray reopening. CI tests and builds the project on all three operating systems. Apple SMC and Lenovo WMI charge control remain experimental and require device-level validation; see [hardware compatibility](docs/hardware.md) for the current support boundaries.
 
 ## Features
 
@@ -24,6 +24,7 @@ Available controls depend on your laptop's kernel driver, firmware and vendor in
 - Control compatible MagSafe lights and prevent idle sleep during active battery care.
 - Use installed CLI commands from macOS Shortcuts.
 - Keep charging settings active through a separate background service.
+- Optionally launch the GUI in the tray at login, independently of that service.
 - Inspect device capabilities and export a compatibility report.
 - Use the CLI independently of the tray app.
 - Use the desktop app in English, Russian, Spanish, German, French, Japanese or Brazilian Portuguese, with system light/dark appearance.
@@ -34,18 +35,18 @@ See [battery care and schedules](docs/battery-care.md) for hardware requirements
 
 <!-- downloads:start -->
 
-Direct downloads for stable release [v0.3.0](https://github.com/0then0/BatteryBridge/releases/tag/v0.3.0):
+Direct downloads for stable release [v0.3.1](https://github.com/0then0/BatteryBridge/releases/tag/v0.3.1):
 
 | Platform | Architecture | Download | Installation |
 | --- | --- | --- | --- |
-| macOS 11+ | Intel + Apple Silicon (universal) | [Installer (.pkg)](https://github.com/0then0/BatteryBridge/releases/download/v0.3.0/BatteryBridge-macos-universal.pkg) | App and background service |
-| Windows 10/11 | x86_64 | [Installer (.exe)](https://github.com/0then0/BatteryBridge/releases/download/v0.3.0/BatteryBridge-windows-x86_64-setup.exe) | App and SYSTEM background task |
-| Ubuntu 24.04+ / Debian 13+ | x86_64 | [Debian package (.deb)](https://github.com/0then0/BatteryBridge/releases/download/v0.3.0/BatteryBridge-linux-x86_64.deb) | App and systemd service; requires the `sudo` group |
-| Fedora 41+ / compatible RPM systems | x86_64 | [RPM package (.rpm)](https://github.com/0then0/BatteryBridge/releases/download/v0.3.0/BatteryBridge-linux-x86_64.rpm) | App and systemd service; requires the `wheel` group |
+| macOS 11+ | Intel + Apple Silicon (universal) | [Installer (.pkg)](https://github.com/0then0/BatteryBridge/releases/download/v0.3.1/BatteryBridge-macos-universal.pkg) | App and background service |
+| Windows 10/11 | x86_64 | [Installer (.exe)](https://github.com/0then0/BatteryBridge/releases/download/v0.3.1/BatteryBridge-windows-x86_64-setup.exe) | App and SYSTEM background task |
+| Ubuntu 24.04+ / Debian 13+ | x86_64 | [Debian package (.deb)](https://github.com/0then0/BatteryBridge/releases/download/v0.3.1/BatteryBridge-linux-x86_64.deb) | App and systemd service; requires the `sudo` group |
+| Fedora 41+ / compatible RPM systems | x86_64 | [RPM package (.rpm)](https://github.com/0then0/BatteryBridge/releases/download/v0.3.1/BatteryBridge-linux-x86_64.rpm) | App and systemd service; requires the `wheel` group |
 
-Developer archives: [macOS universal](https://github.com/0then0/BatteryBridge/releases/download/v0.3.0/batterybridge-macos-universal.tar.gz), [Windows](https://github.com/0then0/BatteryBridge/releases/download/v0.3.0/batterybridge-windows-x86_64.zip), [Linux](https://github.com/0then0/BatteryBridge/releases/download/v0.3.0/batterybridge-linux-x86_64.tar.gz).
+Developer archives: [macOS universal](https://github.com/0then0/BatteryBridge/releases/download/v0.3.1/batterybridge-macos-universal.tar.gz), [Windows](https://github.com/0then0/BatteryBridge/releases/download/v0.3.1/batterybridge-windows-x86_64.zip), [Linux](https://github.com/0then0/BatteryBridge/releases/download/v0.3.1/batterybridge-linux-x86_64.tar.gz).
 
-[SHA-256 checksums](https://github.com/0then0/BatteryBridge/releases/download/v0.3.0/SHA256SUMS.txt) · [Installation instructions](docs/install.md)
+[SHA-256 checksums](https://github.com/0then0/BatteryBridge/releases/download/v0.3.1/SHA256SUMS.txt) · [Installation instructions](docs/install.md)
 
 The installers include the charging service; no separate Terminal or PowerShell setup is needed. macOS and Windows installers are unsigned. Linux packages require a running systemd system and native OpenGL/EGL graphics libraries; they are not universal Linux binaries. Hardware charge control remains device-dependent and experimental on macOS and Lenovo WMI.
 
@@ -57,9 +58,9 @@ Download the installer for your system above, open it in Finder, Explorer or you
 
 Use the system's app/package manager to remove Windows and Linux packages. On macOS, use **Uninstall BatteryBridge** in the app. See [installation](docs/install.md) for account permissions, updates, unsigned-package prompts and removal behavior.
 
-Source builds after v0.3.0 also include an optional **Launch at login** setting.
+Enable **Launch at login** below the language selector to start the GUI automatically.
 It starts the GUI in the tray after sign-in, independently of the charging
-service. See [autostart requirements](docs/install.md#launch-at-login-next-release).
+service. See [autostart requirements](docs/install.md#launch-at-login).
 
 ### Build from source
 
@@ -123,7 +124,10 @@ Compatibility reports include device model, OS version and detected charging int
 
 ## Contributing
 
-[CONTRIBUTING.md](CONTRIBUTING.md) covers local checks, bug reports and pull requests. To add device support, read the [backend development guide](docs/contributing-backends.md). The [repository guide](docs/github.md) explains CI, build artifacts and the release process.
+[CONTRIBUTING.md](CONTRIBUTING.md) covers local checks, bug reports and pull requests.
+Read the [Code of Conduct](CODE_OF_CONDUCT.md), [security policy](SECURITY.md) and
+[changelog](CHANGELOG.md) for participation rules, private vulnerability reporting
+and release changes. To add device support, read the [backend development guide](docs/contributing-backends.md). The [repository guide](docs/github.md) explains CI, build artifacts and the release process.
 
 ## Roadmap
 

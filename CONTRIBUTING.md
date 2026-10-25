@@ -2,9 +2,12 @@
 
 Contributions are welcome for device support, charging-policy correctness, diagnostics, accessibility and documentation. Start with the [architecture guide](docs/architecture.md) to find the relevant component.
 
+Participation follows the [Code of Conduct](CODE_OF_CONDUCT.md). Report vulnerabilities
+privately using the [security policy](SECURITY.md), rather than a public issue.
+
 ## Report a problem
 
-Search existing [issues](https://github.com/0then0/BatteryBridge/issues) before opening a new one. Include the BatteryBridge version, OS version, expected behavior, actual behavior and reproduction steps. For compatibility problems, attach a reviewed `batterybridge probe --json` report and describe the affected charging feature.
+Search existing [issues](https://github.com/0then0/batterybridge/issues) before using the [bug or feature forms](https://github.com/0then0/batterybridge/issues/new/choose). Include the BatteryBridge version, OS version, expected behavior, actual behavior and reproduction steps. For compatibility problems, attach a reviewed `batterybridge probe --json` report and describe the affected charging feature.
 
 Remove personal identifiers from logs and reports. Include device model and relevant firmware or driver versions, but omit serials, UUIDs and raw WMI instance paths. CI results and synthetic fixtures should be identified separately from tests on a physical laptop.
 
@@ -46,5 +49,10 @@ The [hardware guide](docs/hardware.md#device-validation) describes supervised va
 ## Submit a pull request
 
 Explain the problem, resulting behavior and checks you ran. Keep unrelated changes separate and add regression coverage for changed behavior. Update user documentation when commands, capabilities or installation requirements change.
+
+Use the pull request template to describe validation and compatibility. Add
+user-visible changes to the unreleased section of [CHANGELOG.md](CHANGELOG.md),
+or create that section above the latest release if it is absent. Changes to
+dependencies must include the lockfile; avoid unrelated dependency updates.
 
 Use Conventional Commits in English: `feat`, `fix`, `refactor`, `chore`, `docs` or `test`. The same format is suitable for pull request titles.

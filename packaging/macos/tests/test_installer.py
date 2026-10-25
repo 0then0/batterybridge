@@ -184,14 +184,14 @@ class InstallerTests(unittest.TestCase):
         component = expanded / "component.pkg"
         info = ET.parse(component / "PackageInfo").getroot()
         self.assertEqual(info.get("auth"), "root")
-        self.assertEqual(info.get("version"), "0.3.0.5")
+        self.assertEqual(info.get("version"), builder.RECEIPT)
         self.assertEqual(info.get("relocatable"), "false")
-        self.assertEqual(info.find("bundle").get("CFBundleVersion"), "5")
+        self.assertEqual(info.find("bundle").get("CFBundleVersion"), universal.BUILD)
         self.assertIsNotNone(info.find("scripts/preinstall"))
         self.assertIsNotNone(info.find("scripts/postinstall"))
         self.assertEqual(len(info.find("relocate")), 0)
         app_info = plistlib.loads((component / "Payload/Applications/BatteryBridge.app/Contents/Info.plist").read_bytes())
-        self.assertEqual(app_info["CFBundleShortVersionString"], "0.3.0")
+        self.assertEqual(app_info["CFBundleShortVersionString"], universal.VERSION)
         self.assertEqual(set(app_info["CFBundleLocalizations"]), {"en", "ru", "es", "de", "fr", "ja", "pt-BR"})
         for locale in app_info["CFBundleLocalizations"]:
             self.assertTrue((expanded / "Resources" / f"{locale}.lproj" / "Welcome.html").is_file())

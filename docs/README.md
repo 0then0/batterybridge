@@ -27,6 +27,8 @@ For graphical installation on each supported platform, start with [Install Batte
 - [Architecture](architecture.md): workspace layout and request flow.
 - [Developing a backend](contributing-backends.md): discovery, capabilities, adapters and tests.
 - [Repository and releases](github.md): CI, workflow artifacts and release preparation.
+- [Changelog](../CHANGELOG.md): user-visible changes and upgrade requirements.
+- [Security policy](../SECURITY.md) and [Code of Conduct](../CODE_OF_CONDUCT.md): private reporting and project participation.
 
 ## Choosing the right interface
 

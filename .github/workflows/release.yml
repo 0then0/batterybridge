@@ -5,8 +5,12 @@ on:
   workflow_dispatch:
 permissions:
   contents: read
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: false
 jobs:
   build:
+    timeout-minutes: 45
     strategy:
       fail-fast: false
       matrix:
@@ -20,6 +24,21 @@ jobs:
     runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@v4
+      - name: Validate release version and notes
+        env:
+          RELEASE_TAG: ${{ github.ref_type == 'tag' && github.ref_name || '' }}
+        shell: bash
+        run: |
+          if [[ "$RUNNER_OS" == Windows ]]; then python_cmd=python; else python_cmd=python3; fi
+          "$python_cmd" - <<'PY'
+          import os, pathlib, re
+          version = re.search(r'^version = "([^"]+)"', pathlib.Path('Cargo.toml').read_text(), re.M)[1]
+          tag = os.environ['RELEASE_TAG']
+          if tag and tag != 'v' + version:
+              raise SystemExit(f'Tag {tag} does not match Cargo version {version}')
+          if not re.search(r'^## \[' + re.escape(version) + r'\] - \d{4}-\d{2}-\d{2}$', pathlib.Path('CHANGELOG.md').read_text(), re.M):
+              raise SystemExit(f'Missing dated changelog entry for {version}')
+          PY
       - uses: dtolnay/rust-toolchain@stable
       - name: Linux native graphics and packaging prerequisites
         if: runner.os == 'Linux'
@@ -74,7 +93,7 @@ jobs:
           $build = if ($IsMacOS) { 'target/universal-apple-darwin/release' } else { 'target/release' }
           Copy-Item "$build/batterybridge$suffix" artifact/
           Copy-Item "$build/batterybridge-service$suffix" artifact/
-          Copy-Item README.md,LICENSE artifact/
+          Copy-Item README.md,LICENSE,CHANGELOG.md,CONTRIBUTING.md,CODE_OF_CONDUCT.md,SECURITY.md artifact/
           Copy-Item -Recurse packaging,docs,assets artifact/
           Copy-Item -Recurse "$build/bundle" artifact/gui
           Copy-Item "$build/batterybridge-gui$suffix" artifact/gui/
@@ -105,6 +124,7 @@ jobs:
           path: BatteryBridge-*
           if-no-files-found: error
   publish:
+    timeout-minutes: 10
     if: startsWith(github.ref, 'refs/tags/v')
     needs: build
     runs-on: ubuntu-24.04
@@ -122,9 +142,20 @@ jobs:
           TAG: ${{ github.ref_name }}
         shell: bash
         run: |
+          python3 - <<'PY'
+          import os, pathlib, re
+          tag = os.environ['TAG']
+          version = tag.removeprefix('v')
+          source = pathlib.Path('CHANGELOG.md').read_text()
+          entry = re.search(r'^## \[' + re.escape(version) + r'\][^\n]*\n(.*?)(?=^## |\Z)', source, re.M | re.S)
+          if not entry:
+              raise SystemExit(f'No release notes for {tag}')
+          notes = entry[1].strip().replace('](docs/', f"](https://github.com/{os.environ['GITHUB_REPOSITORY']}/blob/{tag}/docs/")
+          pathlib.Path('release-notes.md').write_text(notes + '\n')
+          PY
           cd release-assets
           sha256sum -- * > SHA256SUMS.txt
           args=()
           if [[ "$TAG" == *-* ]]; then args+=(--prerelease); fi
           gh release create "$TAG" --verify-tag --title "BatteryBridge $TAG" \
-            --notes-file ../packaging/macos/RELEASE.md "${args[@]}" -- *
+            --notes-file ../release-notes.md "${args[@]}" -- *

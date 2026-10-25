@@ -1,0 +1,8 @@
+blank_issues_enabled: false
+contact_links:
+  - name: Report a security vulnerability privately
+    url: https://github.com/0then0/batterybridge/security/advisories/new
+    about: Do not disclose vulnerabilities or sensitive data in public issues.
+  - name: Installation and hardware documentation
+    url: https://github.com/0then0/batterybridge/blob/main/docs/README.md
+    about: Check installation, device capabilities and known hardware limits.

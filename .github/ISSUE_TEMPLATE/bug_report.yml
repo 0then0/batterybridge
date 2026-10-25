@@ -1,0 +1,47 @@
+name: Bug or device compatibility problem
+description: Report reproducible failures in the app, service or hardware support.
+title: "bug: "
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Search existing issues first. For security vulnerabilities, use the private reporting link instead.
+        Review logs and reports before sharing. Remove serials, UUIDs, usernames and raw WMI instance paths.
+  - type: input
+    id: version
+    attributes:
+      label: BatteryBridge version and installation method
+      placeholder: "For example: 0.3.1, universal macOS package"
+    validations:
+      required: true
+  - type: input
+    id: system
+    attributes:
+      label: Operating system and architecture
+      placeholder: "For example: macOS 15.7, Apple Silicon"
+    validations:
+      required: true
+  - type: input
+    id: device
+    attributes:
+      label: Device model and relevant firmware or driver version
+      description: Needed for charging or telemetry problems; omit unique device identifiers.
+  - type: textarea
+    id: reproduce
+    attributes:
+      label: Steps to reproduce
+      description: Include the action or command, charging source, and sleep/lid state when relevant.
+    validations:
+      required: true
+  - type: textarea
+    id: result
+    attributes:
+      label: Expected and actual behavior
+      description: Include the exact error message and whether the problem is repeatable.
+    validations:
+      required: true
+  - type: textarea
+    id: diagnostics
+    attributes:
+      label: Reviewed diagnostics or screenshots
+      description: For compatibility issues, attach a reviewed report from the GUI or `batterybridge probe --json`. State what was observed on real hardware versus a synthetic test.
