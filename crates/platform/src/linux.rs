@@ -200,6 +200,16 @@ impl ChargeController for SysfsController {
             }));
         apply_threshold_pair(self, start, stop)
     }
+    /// The only mechanism is the kernel threshold pair. Whether the platform
+    /// keeps it while the OS is off depends on the driver and firmware and is
+    /// not documented by the power_supply ABI, so it is treated as unknown.
+    /// There is no daemon-held state: `Overrides` has nothing to give back.
+    fn release(&mut self, scope: Release) -> Result<()> {
+        match scope {
+            Release::Overrides => Ok(()),
+            Release::Everything => self.apply(None, None),
+        }
+    }
 }
 
 const START: &str = "charge_control_start_threshold";
@@ -269,7 +279,9 @@ mod tests {
         c.apply(Some(75), Some(80)).unwrap();
         assert_eq!(number(b.join("charge_control_end_threshold")), Some(80));
         assert!(c.apply(Some(90), Some(80)).is_err());
-        c.apply(None, None).unwrap();
+        c.release(Release::Overrides).unwrap();
+        assert_eq!(number(b.join("charge_control_end_threshold")), Some(80));
+        c.release(Release::Everything).unwrap();
         assert_eq!(number(b.join("charge_control_end_threshold")), Some(100));
         fs::remove_dir_all(root).unwrap();
     }

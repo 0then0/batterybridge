@@ -134,8 +134,9 @@ impl App {
                     id: APP_ID,
                     title: "BatteryBridge".into(),
                     icon: tray_icon,
-                    template_icon: None,
-                    themed_icon: true,
+                    template_icon: Some(tray_template),
+                    // The pixels change with the charge level; a panel must not substitute the app icon.
+                    themed_icon: false,
                     menu: vec![
                         MenuItem::action("open", i18n::text(&locale, "trayOpen")),
                         MenuItem::action("topup", i18n::text(&locale, "topUp")),
@@ -247,7 +248,16 @@ impl App {
         });
     }
     fn request(&mut self, command: Command) {
-        if self.preview || self.busy {
+        if self.preview {
+            return;
+        }
+        if self.busy {
+            // A refresh is not an action. Anything else is refused visibly, and a
+            // success banner from the previous operation must not stand in for it.
+            if !matches!(command, Command::Status | Command::Probe) {
+                self.model.updated = false;
+                self.model.error = Some(i18n::text(&self.locale, "operationBusy"));
+            }
             return;
         }
         if !matches!(command, Command::Status | Command::Probe) && self.model.read_only() {
@@ -280,7 +290,7 @@ impl App {
                     .unwrap_or(255),
                 Ordering::Relaxed,
             );
-            tray.set_icon(tray_icon, None);
+            tray.set_icon(tray_icon, Some(tray_template));
             let state = snapshot
                 .batteries
                 .first()
@@ -500,7 +510,8 @@ fn icon_data() -> &'static egui::IconData {
     })
 }
 static TRAY_PERCENT: AtomicU8 = AtomicU8::new(255);
-fn tray_icon(size: usize) -> Vec<u8> {
+/// The same battery silhouette in one colour, transparent elsewhere.
+fn tray_shape(size: usize, rgb: [u8; 3]) -> Vec<u8> {
     let mut rgba = vec![0; size * size * 4];
     let percent = TRAY_PERCENT.load(Ordering::Relaxed);
     // Draw at native pixel density while retaining a crisp battery silhouette.
@@ -517,11 +528,19 @@ fn tray_icon(size: usize) -> Vec<u8> {
                 && x - 7 < usize::from(percent) * 16 / 100;
             if edge || tip || fill {
                 rgba[(row * size + col) * 4..(row * size + col + 1) * 4]
-                    .copy_from_slice(&[216, 234, 255, 255]);
+                    .copy_from_slice(&[rgb[0], rgb[1], rgb[2], 255]);
             }
         }
     }
     rgba
+}
+/// White on Linux and Windows panels.
+fn tray_icon(size: usize) -> Vec<u8> {
+    tray_shape(size, [255, 255, 255])
+}
+/// Black template: macOS recolours it white or black to match the menu bar.
+fn tray_template(size: usize) -> Vec<u8> {
+    tray_shape(size, [0, 0, 0])
 }
 
 fn run() -> Result<(), String> {
@@ -702,6 +721,48 @@ mod tests {
             start: None,
         });
         assert!(!app.busy);
+    }
+
+    #[test]
+    fn tray_icon_is_plain_white_and_its_template_is_the_same_shape_in_black() {
+        TRAY_PERCENT.store(50, Ordering::Relaxed);
+        let (white, black) = (tray_icon(32), tray_template(32));
+        assert_eq!(white.len(), black.len());
+        let mut drawn = 0;
+        for (w, b) in white.chunks(4).zip(black.chunks(4)) {
+            assert_eq!(w[3], b[3], "same silhouette");
+            if w[3] != 0 {
+                drawn += 1;
+                assert_eq!(w[..3], [255, 255, 255]);
+                assert_eq!(b[..3], [0, 0, 0]);
+            }
+        }
+        assert!(drawn > 0);
+    }
+
+    #[test]
+    fn action_during_a_running_request_is_refused_visibly_and_clears_stale_success() {
+        let mut app = preview();
+        app.preview = false;
+        app.model.updated = true;
+        app.busy = true;
+        app.request(Command::Limit {
+            stop: None,
+            start: None,
+        });
+        assert!(
+            !app.model.updated,
+            "previous success must not stand in for the dropped action"
+        );
+        assert_eq!(
+            app.model.error.as_deref(),
+            Some(i18n::text(&app.locale, "operationBusy").as_str())
+        );
+        assert!(app.pending_command.is_none());
+        // Periodic refreshes stay silent.
+        app.model.error = None;
+        app.request(Command::Status);
+        assert!(app.model.error.is_none());
     }
 
     #[test]

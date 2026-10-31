@@ -40,6 +40,20 @@ pub enum Error {
     ProtocolError(String),
 }
 impl Error {
+    /// Rewrite the human-readable detail while keeping the error kind.
+    pub fn map_detail(self, f: impl FnOnce(String) -> String) -> Self {
+        match self {
+            Self::Unsupported(d) => Self::Unsupported(f(d)),
+            Self::PermissionDenied(d) => Self::PermissionDenied(f(d)),
+            Self::ServiceUnavailable(d) => Self::ServiceUnavailable(f(d)),
+            Self::BackendUnavailable(d) => Self::BackendUnavailable(f(d)),
+            Self::HardwareError(d) => Self::HardwareError(f(d)),
+            Self::InvalidLimit(d) => Self::InvalidLimit(f(d)),
+            Self::PlatformError(d) => Self::PlatformError(f(d)),
+            Self::ConfigurationError(d) => Self::ConfigurationError(f(d)),
+            Self::ProtocolError(d) => Self::ProtocolError(f(d)),
+        }
+    }
     pub fn io(operation: &str, e: std::io::Error) -> Self {
         match e.kind() {
             std::io::ErrorKind::PermissionDenied => Self::PermissionDenied(operation.into()),

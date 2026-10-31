@@ -129,8 +129,13 @@ impl ChargeController for Controller {
         batterybridge_core::policy::require(&self.caps.sleep_prevention)?;
         self.awake.set(enabled)
     }
-    fn release(&mut self) -> Result<()> {
-        // Attempt every cleanup even when one hardware operation fails.
+    /// Daemon-held: idle assertion, LED override, adapter (forced discharge)
+    /// gate and the charging gate. They are always reopened because nothing
+    /// maintains them once the service is gone and a closed gate stops charging
+    /// entirely. Native: the Intel `BCLM` firmware threshold, which only
+    /// `Everything` returns to 100. Survival of either across power-off or an
+    /// SMC reset is unverified. Every step runs even when another fails.
+    fn release(&mut self, scope: Release) -> Result<()> {
         let awake = self.awake.set(false);
         let led = if self.caps.magsafe_led.available() {
             self.magsafe_led(LedMode::System)
@@ -147,11 +152,17 @@ impl ChargeController for Controller {
         } else {
             Ok(())
         };
-        let limit = if self.bclm {
+        let limit = if self.bclm && scope == Release::Everything {
             self.smc.set_stop(100)
         } else {
             Ok(())
         };
-        awake.and(led).and(discharge).and(gate).and(limit)
+        merge_steps([
+            ("idle-sleep assertion", awake),
+            ("MagSafe LED", led),
+            ("forced discharge", discharge),
+            ("charging gate", gate),
+            ("BCLM threshold", limit),
+        ])
     }
 }

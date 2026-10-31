@@ -112,7 +112,7 @@ fn run() -> Result<()> {
         match rx.recv_timeout(next_tick.saturating_duration_since(Instant::now())) {
             Ok(Event::Shutdown) => break,
             Ok(Event::Power(PowerEvent::Wake)) => {
-                service.tick();
+                service.wake();
                 next_tick = Instant::now() + interval;
             }
             #[cfg(target_os = "macos")]
@@ -139,16 +139,71 @@ fn run() -> Result<()> {
             Err(mpsc::RecvTimeoutError::Disconnected) => break,
         }
     }
+    // Orderly stop only. SIGKILL, power loss and a forced OS shutdown never get
+    // here; see docs/service.md for what each backend leaves behind.
     let result = service.shutdown();
+    refuse_queued(&rx);
     #[cfg(unix)]
     {
         let _ = std::fs::remove_file(endpoint);
     }
     result
 }
+/// Answer connections that were accepted before the stop with an explicit refusal.
+/// The request is read first: closing a socket that still holds unread data can
+/// reset the connection and replace the refusal with a transport error. The
+/// whole drain is bounded so a stalled client cannot hold up the stop.
+fn refuse_queued(rx: &mpsc::Receiver<Event>) {
+    let deadline = Instant::now() + Duration::from_secs(5);
+    while Instant::now() < deadline {
+        let Ok(Event::Connection(mut stream)) = rx.try_recv() else {
+            break;
+        };
+        let _ = ipc::receive::<Request>(&mut stream);
+        let refusal = Response::Error(Error::ServiceUnavailable("service is shutting down".into()));
+        let _ = ipc::send(&mut stream, &refusal);
+    }
+}
 fn main() {
     if let Err(e) = run() {
         eprintln!("{e}");
         std::process::exit(1);
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn queued_clients_receive_the_shutdown_refusal_not_a_transport_error() {
+        let endpoint = std::env::temp_dir()
+            .join(format!("bb-queued-{}", std::process::id()))
+            .to_string_lossy()
+            .into_owned();
+        let listener = ipc::listen(&endpoint).unwrap();
+        let (tx, rx) = mpsc::channel();
+        let accept = std::thread::spawn(move || {
+            for _ in 0..2 {
+                let stream = listener.incoming().next().unwrap().unwrap();
+                tx.send(Event::Connection(stream)).unwrap();
+            }
+        });
+        let clients: Vec<_> = (0..2)
+            .map(|_| {
+                let endpoint = endpoint.clone();
+                std::thread::spawn(move || ipc::call_at(&endpoint, Command::Status))
+            })
+            .collect();
+        accept.join().unwrap();
+        refuse_queued(&rx);
+        for client in clients {
+            assert!(matches!(
+                client.join().unwrap(),
+                Err(Error::ServiceUnavailable(message)) if message.contains("shutting down")
+            ));
+        }
+        #[cfg(unix)]
+        let _ = std::fs::remove_file(endpoint);
     }
 }

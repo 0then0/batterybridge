@@ -35,7 +35,7 @@ On the Lenovo WMI backend, the policy selects a fixed 80% conservation mode or o
 
 ## Temporary modes
 
-Top-up, target charge, pause, hold, active force discharge and calibration exist only in service memory. They are not saved in TOML. Restarting the service restores the saved limit and clears temporary modes. Setting or disabling a limit also cancels temporary modes.
+Top-up, target charge, pause, hold, active force discharge and calibration exist only in service memory. They are not saved in TOML. Restarting the service restores the saved limit and clears temporary modes, including pause. Stopping the service keeps the saved limit; see [lifecycle](lifecycle.md). Setting or disabling a limit also cancels temporary modes.
 
 Top-up completes when the selected battery reaches 100% or reports full. Force discharge stops at its target and is cancelled on sensor failure, orderly shutdown or macOS sleep.
 

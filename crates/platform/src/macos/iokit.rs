@@ -223,6 +223,9 @@ mod telemetry_tests {
                 self.0 = enabled;
                 Ok(())
             }
+            fn release(&mut self, _: Release) -> Result<()> {
+                Ok(())
+            }
         }
         let mut controller = Controller::default();
         let mut policy = policy::Policy::default();

@@ -22,13 +22,13 @@ batterybridge adapter on
 - `charge-to` charges to the requested level and maintains that temporary target until cancellation. It can override a lower saved limit. It does not force an already higher battery percentage down.
 - `discharge` uses battery power while plugged in until its target, then restores the saved limit. The minimum is 20%.
 - `hold` stops charging immediately until cancellation; it requires a real charging gate.
-- `pause` releases all BatteryBridge hardware controls, including LED and idle-sleep overrides. Normal charging is allowed. Saved settings are retained; `resume` restores them.
+- `pause` releases all BatteryBridge hardware controls: the percentage limit (including a native threshold), the charging gate, forced discharge, LED and idle-sleep overrides. Normal charging is allowed. Saved settings are retained; `resume` restores them. Pause lasts until `resume` or a service restart, which re-applies the saved policy.
 - `cancel` restores the saved policy and ends temporary operations. It also suppresses automatic discharge until `resume`, a limit change or service restart, so cancellation does not immediately start another discharge.
 - `adapter off` is bounded discharge to 20%, not indefinite power isolation. `adapter on` restores the saved policy. Both require adapter-gate support.
 
-Changing or disabling a limit cancels temporary modes. `limit off` disables percentage control but preserves enabled care settings, including temperature protection and schedules. Use **Pause battery control** to release all controls temporarily. `batterybridge reset` permanently disables the limit, care settings and schedules, then restores normal charging. Native removal uses this reset before stopping a service that could otherwise run a pending schedule. Linux removal stops the service gracefully and checks its release result.
+Changing or disabling a limit cancels temporary modes. `limit off` disables percentage control but preserves enabled care settings, including temperature protection and schedules. Use **Pause battery control** to release all controls temporarily. `batterybridge reset` permanently disables the limit, care settings and schedules, then restores normal charging. Native removal runs this reset first and then stops the service; stopping the service alone does not clear a saved limit. See [lifecycle](lifecycle.md).
 
-Temporary modes are cleared by service restart. Discharge and calibration also stop on battery-sensor failure, lost external power, macOS sleep and orderly shutdown. A failed hardware update cancels temporary modes during rollback. Abrupt termination can leave private hardware gates latched until recovery; see [hardware limitations](hardware.md).
+Temporary modes are cleared by service restart. Discharge and calibration also stop on battery-sensor failure, lost external power, macOS sleep and orderly shutdown. On shutdown a saved native threshold is kept, and a temporary top-up or target is replaced by the saved limit. A failed hardware update cancels temporary modes during rollback. Abrupt termination can leave private hardware gates latched until recovery; see [hardware limitations](hardware.md).
 
 ## Temperature protection and automatic discharge
 

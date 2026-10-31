@@ -13,6 +13,10 @@ pub struct Service {
     last_error: Option<Error>,
     sleep_error: Option<Error>,
     schedule_error: Option<Error>,
+    /// Set once shutdown starts: no command, schedule or reconciliation may touch hardware afterwards.
+    stopping: bool,
+    /// Between sleep preparation and the first reconciliation after wake the hardware state is unverified.
+    awaiting_wake: bool,
 }
 impl Service {
     pub fn new(platform: Platform, path: PathBuf) -> Result<Self> {
@@ -29,6 +33,8 @@ impl Service {
             last_error,
             sleep_error: None,
             schedule_error: None,
+            stopping: false,
+            awaiting_wake: false,
         })
     }
     fn apply_policy(&mut self, next: &mut Policy) -> Result<()> {
@@ -38,13 +44,14 @@ impl Service {
             .ok_or_else(|| Error::Unsupported("no active charge controller; run probe".into()))?;
         let batteries = self.platform.monitor.batteries()?;
         let Some(battery) = batteries.first() else {
-            controller.release()?;
+            // Nothing can be written to a missing pack; end daemon-held state only.
+            let _ = next.settle(controller.as_mut());
             return Err(Error::BackendUnavailable("battery missing".into()));
         };
         next.tick(controller.as_mut(), battery)
     }
     pub fn tick(&mut self) {
-        if self.controller.is_none() {
+        if self.controller.is_none() || self.stopping {
             return;
         }
         if let Err(error) = self.run_schedules(chrono::Utc::now().timestamp()) {
@@ -65,11 +72,14 @@ impl Service {
                 self.last_error = None;
             }
             Err(e) => {
-                if let Some(c) = &mut self.controller {
-                    let _ = c.release();
-                }
                 // Ephemeral modes are cancelled on errors, never restarted blindly.
                 self.policy.cancel_temporary();
+                // An enforcement error must not leave a latched gate or a temporary
+                // override. A saved native threshold is re-asserted, not cleared:
+                // it does not depend on the failed read. The error stays visible.
+                if let Some(c) = &mut self.controller {
+                    let _ = self.policy.settle(c.as_mut());
+                }
                 if self.policy.config.care.heat_limit_c.is_some() {
                     self.policy.runtime.heat_paused = true;
                     if let Some(controller) = &mut self.controller {
@@ -110,6 +120,11 @@ impl Service {
         error.map_or(Ok(()), Err)
     }
     pub fn prepare_sleep(&mut self) -> Result<()> {
+        if self.stopping {
+            return Ok(());
+        }
+        // Until `wake` reconciles, firmware may have changed anything we set.
+        self.awaiting_wake = true;
         let result = match &mut self.controller {
             Some(controller) => self.policy.prepare_sleep(controller.as_mut()),
             None => Ok(()),
@@ -121,13 +136,25 @@ impl Service {
             .map(|error| Error::PlatformError(format!("Sleep preparation failed: {error}")));
         result
     }
+    /// Re-read and rewrite the hardware before the saved policy is reported as restored.
+    pub fn wake(&mut self) {
+        self.tick();
+        self.awaiting_wake = false;
+    }
+    /// Orderly stop; see [`Policy::shutdown`] for what is released and what is kept.
+    /// Safe to repeat: every step converges on the same hardware state.
     pub fn shutdown(&mut self) -> Result<()> {
-        if let Some(controller) = &mut self.controller {
-            controller.release()?;
+        // No new action may start; queued ones are answered by the caller.
+        self.stopping = true;
+        match &mut self.controller {
+            Some(controller) => self.policy.shutdown(controller.as_mut()),
+            None => Ok(()),
         }
-        Ok(())
     }
     pub fn handle(&mut self, request: Request) -> Response {
+        if self.stopping {
+            return Response::Error(Error::ServiceUnavailable("service is shutting down".into()));
+        }
         if let Err(e) = request.validate() {
             return Response::Error(e);
         }
@@ -138,7 +165,7 @@ impl Service {
     }
     fn rollback(&mut self) {
         if let Some(controller) = &mut self.controller {
-            let _ = controller.release();
+            let _ = controller.release(Release::Overrides);
         }
         let mut previous = self.policy.clone();
         let paused = previous.runtime.paused;
@@ -147,12 +174,40 @@ impl Service {
         if self.apply_policy(&mut previous).is_err()
             && let Some(controller) = &mut self.controller
         {
-            let _ = controller.release();
+            let _ = previous.settle(controller.as_mut());
             if previous.config.care.heat_limit_c.is_some() {
                 let _ = controller.charging(false);
             }
         }
         self.policy = previous;
+    }
+    /// Reset is its own contract, not a tick with an empty policy: every
+    /// threshold and override is returned to the hardware, every step is
+    /// attempted, and the empty policy (no limit, care or schedules) is made
+    /// durable only after the hardware accepted it.
+    fn reset(&mut self) -> Result<Response> {
+        let mut next = self.policy.clone();
+        next.operation(
+            &Command::Reset,
+            &self.platform.report.capabilities,
+            chrono::Utc::now().timestamp(),
+        )?;
+        let controller = self
+            .controller
+            .as_mut()
+            .ok_or_else(|| Error::Unsupported("no active charge controller; run probe".into()))?;
+        if let Err(error) = controller.release(Release::Everything) {
+            self.rollback();
+            return Err(error);
+        }
+        if let Err(error) = config::save(&self.path, &next.config) {
+            self.rollback();
+            return Err(error);
+        }
+        self.policy = next;
+        self.last_error = None;
+        self.schedule_error = None;
+        Ok(Response::Ok)
     }
     fn execute(&mut self, command: Command) -> Result<Response> {
         match command {
@@ -183,8 +238,11 @@ impl Service {
                 discharge_target: self.policy.discharge_target,
                 runtime: self.policy.runtime.clone(),
                 last_error: self
-                    .last_error
-                    .clone()
+                    .awaiting_wake
+                    .then(|| {
+                        Error::PlatformError("hardware state is not yet verified after wake".into())
+                    })
+                    .or_else(|| self.last_error.clone())
                     .or_else(|| self.policy.auxiliary_error.clone())
                     .or_else(|| self.sleep_error.clone())
                     .or_else(|| self.schedule_error.clone()),
@@ -194,6 +252,7 @@ impl Service {
             ))),
             Command::Probe => Ok(Response::Probe(Box::new(Platform::discover()?.report))),
             Command::Config => Ok(Response::Config(self.policy.config.clone())),
+            Command::Reset => self.reset(),
             command => {
                 if let Command::Care { expected, .. } = &command
                     && expected != &self.policy.config.care
@@ -264,6 +323,12 @@ mod tests {
             *self.0.borrow_mut() = stop;
             Ok(())
         }
+        fn release(&mut self, scope: Release) -> Result<()> {
+            match scope {
+                Release::Overrides => Ok(()),
+                Release::Everything => self.apply(None, None),
+            }
+        }
     }
     fn service(path: PathBuf, state: Rc<RefCell<Option<u8>>>) -> Service {
         let device = DeviceInfo {
@@ -294,6 +359,8 @@ mod tests {
             last_error: None,
             sleep_error: None,
             schedule_error: None,
+            stopping: false,
+            awaiting_wake: false,
         }
     }
     fn dir() -> PathBuf {
@@ -320,23 +387,28 @@ mod tests {
                     Err(Error::PlatformError("sleep gate refused".into()))
                 }
             }
+            fn release(&mut self, _: Release) -> Result<()> {
+                Ok(())
+            }
         }
         let mut s = service(dir().join("config.toml"), Rc::new(RefCell::new(None)));
         s.controller = Some(Box::new(SleepFailure));
         s.policy.config.charge_limit = Some(80);
         assert!(s.prepare_sleep().is_err());
-        s.tick(); // 74% allows charging, but cannot validate a previous sleep transition.
+        s.wake(); // 74% allows charging, but cannot validate a previous sleep transition.
         let Response::Status(snapshot) = s.handle(Request::new(Command::Status)) else {
             panic!("status");
         };
         assert_eq!(
             snapshot.last_error,
             Some(Error::PlatformError(
-                "Sleep preparation failed: platform error: sleep gate refused".into()
+                "Sleep preparation failed: platform error: inhibit charging for sleep: sleep gate refused"
+                    .into()
             ))
         );
         s.controller = Some(Box::new(Controller(Rc::new(RefCell::new(None)))));
         s.prepare_sleep().unwrap();
+        s.wake();
         let Response::Status(snapshot) = s.handle(Request::new(Command::Status)) else {
             panic!("status");
         };
@@ -517,6 +589,9 @@ mod tests {
                     Ok(())
                 }
             }
+            fn release(&mut self, _: Release) -> Result<()> {
+                Ok(())
+            }
         }
         let root = dir();
         let path = root.join("config.toml");
@@ -594,7 +669,7 @@ mod tests {
                     Ok(())
                 }
             }
-            fn release(&mut self) -> Result<()> {
+            fn release(&mut self, _: Release) -> Result<()> {
                 let mut state = self.0.borrow_mut();
                 state.enabled = true;
                 state.releases += 1;
@@ -653,3 +728,6 @@ mod tests {
         std::fs::remove_dir_all(root).unwrap();
     }
 }
+
+#[cfg(test)]
+mod lifecycle_tests;

@@ -56,7 +56,7 @@ recreation lifecycle.
 
 The service loads its saved TOML policy at startup, discovers the device and creates a controller when capabilities allow it. It reconciles the desired policy with hardware every 30 seconds while awake. Hardware writes and incoming commands are serialized.
 
-The policy tracks persistent limits separately from temporary top-up, target charge, hold, pause, discharge, calibration and hysteresis state. The core calendar scheduler coalesces missed occurrences; the service durably advances due entries before executing them, so restarting cannot replay a claimed calibration. Service restart clears temporary modes. On macOS, IOKit power notifications coordinate adapter release before sleep and policy reconciliation after wake. Linux and Windows use periodic reconciliation after resume.
+The policy tracks persistent limits separately from temporary top-up, target charge, hold, pause, discharge, calibration and hysteresis state. The core calendar scheduler coalesces missed occurrences; the service durably advances due entries before executing them, so restarting cannot replay a claimed calibration. Service restart clears temporary modes. Orderly stop releases daemon-held overrides and keeps the saved native threshold; reset and removal release everything explicitly (see [lifecycle](lifecycle.md)). On macOS, IOKit power notifications coordinate adapter release before sleep and policy reconciliation after wake. Linux and Windows use periodic reconciliation after resume.
 
 BatteryBridge selects the first present battery for control. Other detected batteries remain visible in status. The Windows Lenovo controller requires exactly one battery because its interface does not provide per-pack selection.
 

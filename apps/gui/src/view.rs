@@ -11,32 +11,42 @@ struct Palette {
     muted: Color32,
     line: Color32,
     accent: Color32,
+    /// Background of selected items. Text keeps `text` (it is overridden globally),
+    /// so this must stay dark or light enough to keep that text readable.
+    selection: Color32,
     signal: Color32,
 }
+/// Greens taken from `assets/icon.svg`: deep #183e34, mint #d9eee2, sage #83bd9b.
 impl Palette {
     fn new(dark: bool) -> Self {
         if dark {
             Self {
-                page: Color32::BLACK,
-                panel: Color32::from_rgb(13, 13, 15),
-                text: Color32::from_rgb(216, 234, 255),
-                muted: Color32::from_rgb(160, 173, 188),
-                line: Color32::from_rgb(64, 68, 74),
-                accent: Color32::from_rgb(31, 88, 242),
+                page: Color32::from_rgb(9, 19, 15),
+                panel: Color32::from_rgb(14, 29, 23),
+                text: Color32::from_rgb(217, 238, 226),
+                muted: Color32::from_rgb(157, 184, 170),
+                line: Color32::from_rgb(42, 70, 57),
+                accent: Color32::from_rgb(131, 189, 155),
+                selection: Color32::from_rgb(40, 82, 64),
                 signal: Color32::from_rgb(255, 65, 5),
             }
         } else {
             Self {
-                page: Color32::from_rgb(232, 237, 244),
-                panel: Color32::from_rgb(245, 247, 250),
-                text: Color32::from_rgb(21, 36, 58),
-                muted: Color32::from_rgb(82, 97, 118),
-                line: Color32::from_rgb(198, 205, 215),
-                accent: Color32::from_rgb(31, 88, 242),
+                page: Color32::from_rgb(228, 238, 232),
+                panel: Color32::from_rgb(244, 249, 246),
+                text: Color32::from_rgb(20, 51, 42),
+                muted: Color32::from_rgb(77, 106, 93),
+                line: Color32::from_rgb(194, 213, 202),
+                accent: Color32::from_rgb(31, 107, 79),
+                selection: Color32::from_rgb(200, 226, 212),
                 signal: Color32::from_rgb(196, 56, 0),
             }
         }
     }
+}
+/// The theme's accent colour, for drawing that is not a selected widget.
+pub fn accent(ui: &egui::Ui) -> Color32 {
+    Palette::new(ui.visuals().dark_mode).accent
 }
 pub fn style(ctx: &egui::Context) {
     ctx.set_theme(egui::ThemePreference::System);
@@ -46,12 +56,15 @@ pub fn style(ctx: &egui::Context) {
         style.visuals.window_fill = p.panel;
         style.visuals.extreme_bg_color = p.page;
         style.visuals.override_text_color = Some(p.text);
-        style.visuals.selection.bg_fill = p.accent;
-        style.visuals.selection.stroke = Stroke::new(1.0, Color32::WHITE);
+        style.visuals.selection.bg_fill = p.selection;
+        style.visuals.selection.stroke = Stroke::new(1.0, p.accent);
+        style.visuals.hyperlink_color = p.accent;
         style.visuals.widgets.noninteractive.bg_stroke = Stroke::new(1.0, p.line);
         style.visuals.widgets.inactive.bg_fill = p.panel;
         style.visuals.widgets.inactive.bg_stroke = Stroke::new(1.0, p.muted);
         style.visuals.widgets.hovered.bg_fill = p.page;
+        style.visuals.widgets.hovered.bg_stroke = Stroke::new(1.0, p.accent);
+        style.visuals.widgets.active.bg_stroke = Stroke::new(1.0, p.accent);
         style.spacing.item_spacing = vec2(10.0, 12.0);
         style.spacing.button_padding = vec2(12.0, 10.0);
         style.spacing.interact_size.y = 40.0;
@@ -1084,5 +1097,57 @@ mod tests {
         }
         let mut output = ctx.end_pass();
         output.textures_delta.clear();
+    }
+}
+
+#[cfg(test)]
+mod palette_tests {
+    use super::*;
+
+    fn luminance(c: Color32) -> f64 {
+        let channel = |v: u8| {
+            let v = f64::from(v) / 255.0;
+            if v <= 0.03928 {
+                v / 12.92
+            } else {
+                ((v + 0.055) / 1.055).powf(2.4)
+            }
+        };
+        0.2126 * channel(c.r()) + 0.7152 * channel(c.g()) + 0.0722 * channel(c.b())
+    }
+    fn contrast(a: Color32, b: Color32) -> f64 {
+        let (hi, lo) = (
+            luminance(a).max(luminance(b)),
+            luminance(a).min(luminance(b)),
+        );
+        (hi + 0.05) / (lo + 0.05)
+    }
+
+    #[test]
+    fn text_stays_readable_on_every_surface_in_both_themes() {
+        for dark in [true, false] {
+            let p = Palette::new(dark);
+            // Text colour is overridden globally, so selected items keep it too.
+            for (name, background) in [
+                ("panel", p.panel),
+                ("page", p.page),
+                ("selection", p.selection),
+            ] {
+                assert!(
+                    contrast(p.text, background) >= 4.5,
+                    "text on {name}, dark={dark}"
+                );
+            }
+            assert!(contrast(p.muted, p.panel) >= 4.5, "muted, dark={dark}");
+            assert!(
+                contrast(p.muted, p.page) >= 4.5,
+                "muted on page, dark={dark}"
+            );
+            assert!(
+                contrast(p.accent, p.panel) >= 3.0,
+                "accent marks, dark={dark}"
+            );
+            assert!(contrast(p.signal, p.page) >= 4.5, "errors, dark={dark}");
+        }
     }
 }

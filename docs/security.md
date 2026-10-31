@@ -41,7 +41,7 @@ Writes use an exclusively created, synced sibling file and same-filesystem repla
 
 Private SMC interfaces can reject writes even with root privileges. Read-only discovery does not establish write permission. Platform authorization and firmware protections remain in effect.
 
-Manual and automatic discharge have a minimum target of 20%. The explicitly requested calibration cycle alone may discharge to 10%. Adapter disable is bounded by the same 20% floor; indefinite isolation is not exposed. The service releases isolation before macOS sleep and on orderly shutdown. Firmware changes and abrupt termination can still affect charging state; supervised validation is described in the [hardware guide](hardware.md#device-validation).
+Manual and automatic discharge have a minimum target of 20%. The explicitly requested calibration cycle alone may discharge to 10%. Adapter disable is bounded by the same 20% floor; indefinite isolation is not exposed. The service releases isolation before macOS sleep and on orderly shutdown; a saved native limit is retained on shutdown and cleared only by `limit off`, `reset` or uninstall (see [lifecycle](lifecycle.md)). Firmware changes and abrupt termination can still affect charging state; supervised validation is described in the [hardware guide](hardware.md#device-validation).
 
 ## Diagnostic privacy
 
