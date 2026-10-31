@@ -34,7 +34,7 @@ To disable the percentage limit (while retaining enabled care settings):
 batterybridge limit off
 ```
 
-Use `batterybridge reset` to disable all care settings and schedules as well and restore normal charging. On sysfs devices with both attributes, disabling the limit sets start 99 and stop 100. It does not restore another charge manager's previous settings. Run one charge-policy manager at a time.
+Use `batterybridge reset` to disable all care settings and schedules as well and restore normal charging. Stopping the service does not clear a saved limit; see [lifecycle](lifecycle.md). On sysfs devices with both attributes, disabling the limit sets start 99 and stop 100. It does not restore another charge manager's previous settings. Run one charge-policy manager at a time.
 
 ## Charge to 100% temporarily
 

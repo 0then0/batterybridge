@@ -323,10 +323,8 @@ impl App {
                         (1.0, ui.visuals().widgets.noninteractive.bg_stroke.color),
                         egui::StrokeKind::Inside,
                     );
-                    ui.painter().add(egui::Shape::line(
-                        points,
-                        (2.0, ui.visuals().selection.bg_fill),
-                    ));
+                    ui.painter()
+                        .add(egui::Shape::line(points, (2.0, crate::view::accent(ui))));
                 }
             });
         egui::CollapsingHeader::new(t("automation"))

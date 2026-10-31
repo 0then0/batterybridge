@@ -181,9 +181,16 @@ fn output(response: Response, json: bool) -> Result<()> {
                     },
                     percentage(b.health_percent)
                 );
+                if b.hardware_stop.is_some() || b.hardware_start.is_some() {
+                    println!(
+                        "Device threshold: stop {}, start {} (read from the device)",
+                        percentage(b.hardware_stop),
+                        percentage(b.hardware_start)
+                    );
+                }
             }
             println!(
-                "\nCharge policy (first battery): {}",
+                "\nSaved charge limit (first battery, configuration): {}",
                 s.config
                     .as_ref()
                     .map(|c| c

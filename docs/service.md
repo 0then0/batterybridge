@@ -38,10 +38,10 @@ Kernel controls in `/sys/class/power_supply` resolve into `/sys/devices`, so the
 
 ### Remove the service
 
-First restore normal charging and verify it on the device:
+`systemctl stop` keeps a saved native threshold. Reset first, which restores normal charging and clears saved limits and schedules, and verify it on the device:
 
 ```sh
-batterybridge limit off
+batterybridge reset
 sudo systemctl disable --now batterybridge
 sudo rm /etc/systemd/system/batterybridge.service
 sudo systemctl daemon-reload
@@ -76,10 +76,10 @@ The service registers IOKit sleep/wake notifications, releases adapter isolation
 
 ### Remove the service
 
-Restore normal charging and verify it before unloading:
+Reset, which restores normal charging and clears saved limits and schedules, and verify it before unloading:
 
 ```sh
-batterybridge limit off
+batterybridge reset
 sudo launchctl bootout system /Library/LaunchDaemons/io.github.batterybridge.plist
 sudo rm /Library/LaunchDaemons/io.github.batterybridge.plist
 ```
@@ -101,6 +101,8 @@ sudo rm /Library/PrivilegedHelperTools/io.github.batterybridge.launcher
 sudo rm -rf /Applications/BatteryBridge.app
 sudo pkgutil --forget io.github.batterybridge.installer
 ```
+
+Stopping the service releases its overrides but keeps a saved limit; the uninstaller therefore resets first. See [lifecycle](lifecycle.md).
 
 The package stores its executables in root-owned `/Library/PrivilegedHelperTools`, independently of a user's source checkout or `/usr/local/bin`. Settings remain in `/Library/Application Support/BatteryBridge/config.toml` for reuse. Removing the GUI alone does not unload the service. The packaged installer preserves the same `admin` IPC access policy as manual installation.
 
@@ -137,13 +139,13 @@ The installer rejects reparse points and directories owned by other users. The s
 
 ### Remove the service
 
-Run `batterybridge limit off` from your CLI location and verify normal charging, then execute the shipped `packaging/windows/uninstall-task.ps1` in an elevated PowerShell. The script unregisters the task; configuration and executables remain on disk. Task Scheduler termination is abrupt, so restore normal charging before stopping it.
+Run `batterybridge reset` from your CLI location and verify normal charging, then execute the shipped `packaging/windows/uninstall-task.ps1` in an elevated PowerShell. The script unregisters the task; configuration and executables remain on disk. Task Scheduler termination is abrupt and runs no cleanup, so reset before stopping it.
 
 ## Troubleshooting
 
 ### Status works, but charging settings are unavailable
 
-Check that the service is running and the user has IPC access. Read-only fallback shows local battery information but cannot retrieve the service policy. On Linux, verify `batterybridge` group membership; on macOS, verify `admin` membership. On Windows, inspect the `BatteryBridge` scheduled task and the installed directories.
+Check that the service is running and the user has IPC access. Read-only fallback shows local battery information but cannot retrieve the service policy. On a manual Linux installation, verify `batterybridge` group membership; for Debian and RPM packages the socket group is `sudo` and `wheel` respectively; on macOS, verify `admin` membership. On Windows, inspect the `BatteryBridge` scheduled task and the installed directories.
 
 Useful service checks:
 
@@ -157,6 +159,10 @@ tail -n 100 /var/log/batterybridge.log
 ```
 
 In PowerShell, use `Get-ScheduledTask -TaskName BatteryBridge` and `Get-ScheduledTaskInfo -TaskName BatteryBridge`.
+
+### Package removal is refused
+
+Debian and RPM removal runs `batterybridge reset` and stops the service before deleting anything. If the service cannot start or reset fails, removal stops with the original error and the service stays installed. Fix the cause (see the service log) and retry. As a last resort for a service that cannot run, remove the package with your package manager's force option after confirming normal charging by other means; a native threshold may still be set in firmware.
 
 ### Configuration prevents startup
 

@@ -11,7 +11,7 @@ body:
     id: version
     attributes:
       label: BatteryBridge version and installation method
-      placeholder: "For example: 0.3.1, universal macOS package"
+      placeholder: "For example: 0.4.0, universal macOS package"
     validations:
       required: true
   - type: input

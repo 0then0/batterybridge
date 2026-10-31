@@ -1,17 +1,25 @@
-<svg xmlns="http://www.w3.org/2000/svg" width="128" height="128" viewBox="0 0 128 128" role="img" aria-labelledby="batterybridge-title">
+<svg
+  xmlns="http://www.w3.org/2000/svg"
+  width="128"
+  height="128"
+  viewBox="0 0 128 128"
+  role="img"
+  aria-labelledby="batterybridge-title"
+>
   <title id="batterybridge-title">BatteryBridge charge control</title>
   <rect x="8" y="8" width="112" height="112" rx="28" fill="#183e34" />
-  <rect x="57" y="22" width="14" height="7" rx="2" fill="#d9eee2" />
+  <rect x="104" y="54" width="10" height="20" rx="3" fill="#d9eee2" />
   <rect
-    x="39"
-    y="29"
-    width="50"
-    height="73"
-    rx="10"
+    x="14"
+    y="40"
+    width="84"
+    height="48"
+    rx="12"
     fill="none"
     stroke="#d9eee2"
-    stroke-width="7"
+    stroke-width="8"
   />
-  <path d="M31 70h66" stroke="#83bd9b" stroke-width="8" stroke-linecap="round" />
-  <path d="M51 89V78m13 11V78m13 11V78" stroke="#83bd9b" stroke-width="6" stroke-linecap="round" />
+  <rect x="22" y="48" width="54" height="32" rx="4" fill="#83bd9b" />
+  <path d="M84 28v72" stroke="#183e34" stroke-width="10" />
+  <path d="M84 31v66" stroke="#d9eee2" stroke-width="6" stroke-linecap="round" />
 </svg>

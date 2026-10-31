@@ -7,7 +7,7 @@ REPO = Path(__file__).resolve().parent.parent
 NAME = 'BatteryBridge'
 IDENTIFIER = 'io.github.batterybridge'
 VERSION = re.search(r'^version = "([^"]+)"', (REPO / 'Cargo.toml').read_text(), re.M)[1]
-BUILD = '6'
+BUILD = '7'
 RECEIPT = f'{VERSION}.{BUILD}'
 LOCALES = sorted(path.stem for path in (REPO / 'apps/gui/locales').glob('*.json'))
 

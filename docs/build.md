@@ -119,3 +119,15 @@ cargo run -p batterybridge-gui --locked -- --preview apps/gui/tests/status.json 
 
 Install/uninstall integration scripts run only on disposable CI machines. Do not
 run `test-installer` or `test-preinstall` scripts on your personal system.
+
+## Application icon
+
+`assets/icon.svg` is the source. `apps/gui/icons` holds its PNG, `.ico` and `.icns`
+renditions, produced by a dependency-free script that mirrors the SVG geometry:
+
+```sh
+python3 assets/render-icons.py
+```
+
+The `.icns` file needs macOS `iconutil`. `packaging/tests/test_icons.py` fails if the
+committed files drift from the script or the SVG colors.

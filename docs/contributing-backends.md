@@ -15,7 +15,7 @@ Monitoring remains independent of controller activation. A missing or inaccessib
 ## Traits and code layout
 
 - `BatteryMonitor` reads battery status.
-- `ChargeController` exposes capabilities, applies thresholds and provides optional gate/discharge operations. `release` requests normal charging.
+- `ChargeController` exposes capabilities, applies thresholds and provides optional gate/discharge operations. `release(scope)` returns hardware to the user with an explicit scope: `Overrides` for daemon-held state only, `Everything` for native thresholds as well. Implement both deliberately and try every step.
 - `DeviceInfoProvider` supplies OS, vendor and model metadata.
 - `PowerMonitor` exposes AC connectivity.
 
@@ -43,7 +43,7 @@ Test the actual adapter with temporary files or a mock transport in addition to 
 
 The service owns controller mutations. Expose fixed operations through the protocol and validate both request ranges and backend-specific values. Use reliable readback where available; document unavailable or ambiguous readback.
 
-Keep start strictly below stop during each intermediate write. Check return codes and recover from partial updates. Release force discharge on target completion, sensor failure, errors, shutdown and suspend. Test these transitions with a fake controller or transport before supervised device testing.
+Keep start strictly below stop during each intermediate write. Check return codes and recover from partial updates. Release force discharge on target completion, sensor failure, errors, shutdown and suspend. Classify each mechanism as a native threshold (kept on orderly stop, persistence unknown until measured), a daemon-held gate or an override (always released on stop), document it in the [lifecycle guide](lifecycle.md), and combine step results with `merge_steps` so one failure never skips an independent step. Test these transitions with a fake controller or transport before supervised device testing.
 
 Native writes are isolated in the platform modules: Linux sysfs operations in `linux.rs`, macOS FFI in the IOKit/SMC/power modules, and Windows Win32 power calls in `windows/power.rs`. Each unsafe call needs a local safety explanation covering ABI layout, ownership, pointer validity and resource lifetime.
 

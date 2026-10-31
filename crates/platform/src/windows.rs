@@ -297,4 +297,14 @@ impl ChargeController for Controller {
         // cannot provide reliable readback of the requested numerical limit.
         Ok(())
     }
+    /// Conservation mode is a firmware setting with no daemon-held companion.
+    /// Its survival across power-off is not established here (unknown), and a
+    /// service stop never reaches this call on Windows: Task Scheduler ends the
+    /// process without notice. `Overrides` therefore has nothing to give back.
+    fn release(&mut self, scope: Release) -> Result<()> {
+        match scope {
+            Release::Overrides => Ok(()),
+            Release::Everything => self.apply(None, None),
+        }
+    }
 }

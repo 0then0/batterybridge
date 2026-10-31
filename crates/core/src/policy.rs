@@ -208,32 +208,96 @@ impl Policy {
             ..RuntimeStatus::default()
         };
     }
+    /// Sleep keeps the saved policy and every native threshold. The daemon
+    /// cannot enforce while asleep, so daemon-held overrides end and a binary
+    /// gate is closed for limits below 100%. Each step is independent: a failed
+    /// discharge release must not skip the charging inhibition.
     pub fn prepare_sleep(&mut self, controller: &mut dyn ChargeController) -> Result<()> {
-        if self.discharge_target.is_some() || self.runtime.calibration.is_some() {
-            controller.force_discharge(false)?;
-            self.discharge_target = None;
-            self.runtime.calibration = None;
-            self.calibration_clock = None;
-        }
-        let idle_error = if controller.capabilities().sleep_prevention.available() {
-            controller.prevent_sleep(false).err()
+        let discharge = if self.discharge_target.is_some() || self.runtime.calibration.is_some() {
+            let result = controller.force_discharge(false);
+            if result.is_ok() {
+                self.discharge_target = None;
+                self.runtime.calibration = None;
+                self.calibration_clock = None;
+            }
+            result
         } else {
-            None
+            Ok(())
         };
-        if idle_error.is_none() {
+        let idle = if controller.capabilities().sleep_prevention.available() {
+            let result = controller.prevent_sleep(false);
+            if result.is_ok() {
+                self.runtime.sleep_prevented = false;
+            }
+            result
+        } else {
             self.runtime.sleep_prevented = false;
-        }
-        if !self.runtime.paused
+            Ok(())
+        };
+        let inhibit = if !self.runtime.paused
             && (self.runtime.charge_target.map_or(
                 self.config.charge_limit.is_some() && !self.top_up,
                 |target| target < 100,
             ) || self.runtime.holding
                 || self.runtime.heat_paused)
         {
-            controller.charging(false)?;
-            self.inhibited = true;
+            let result = controller.charging(false);
+            if result.is_ok() {
+                self.inhibited = true;
+            }
+            result
+        } else {
+            Ok(())
+        };
+        merge_steps([
+            ("release forced discharge", discharge),
+            ("release idle-sleep assertion", idle),
+            ("inhibit charging for sleep", inhibit),
+        ])
+    }
+    /// Orderly stop of the service process. Temporary modes end, daemon-held
+    /// overrides are released, and the hardware is left holding the *saved*
+    /// native threshold rather than a temporary top-up or target. Pause is
+    /// honoured: its release stays in place until the next start re-applies the
+    /// saved policy. Nothing here distinguishes a service restart from an OS
+    /// shutdown, because the process cannot tell them apart reliably.
+    pub fn shutdown(&mut self, controller: &mut dyn ChargeController) -> Result<()> {
+        let paused = self.runtime.paused;
+        self.cancel_temporary();
+        self.runtime.paused = paused;
+        self.settle(controller)
+    }
+    /// Bring the hardware to the saved, non-temporary policy without clearing a
+    /// native threshold: daemon-held overrides end and the saved threshold is
+    /// written again (unless paused, which keeps its release). This is the
+    /// fallback for a failed reconciliation too. The service may not know why
+    /// reconciliation failed, but a native limit does not depend on it, so it
+    /// is never cleared here. Both steps always run.
+    pub fn settle(&self, controller: &mut dyn ChargeController) -> Result<()> {
+        let overrides = controller.release(Release::Overrides);
+        let threshold = if self.runtime.paused {
+            Ok(())
+        } else {
+            let (start, stop) = self.saved_band();
+            controller.apply(start, stop)
+        };
+        merge_steps([
+            ("release daemon-held overrides", overrides),
+            ("restore saved threshold", threshold),
+        ])
+    }
+    /// The native threshold pair that represents the saved, non-temporary policy.
+    fn saved_band(&self) -> (Option<u8>, Option<u8>) {
+        match self.config.charge_limit {
+            None => (None, None),
+            Some(stop) => (
+                self.config
+                    .start_threshold
+                    .enabled
+                    .then_some(self.config.start_threshold.value),
+                Some(stop),
+            ),
         }
-        idle_error.map_or(Ok(()), Err)
     }
     pub fn tick(
         &mut self,
@@ -248,7 +312,7 @@ impl Policy {
             })
         {
             self.cancel_temporary();
-            controller.release()?;
+            let _ = self.settle(controller);
             return Err(Error::PlatformError(
                 "calibration cancelled: clock changed or 24-hour timeout".into(),
             ));
@@ -264,7 +328,7 @@ impl Policy {
         self.auxiliary_error = None;
         require(&controller.capabilities().charge_limit)?;
         if self.runtime.paused {
-            controller.release()?;
+            controller.release(Release::Everything)?;
             self.runtime.sleep_prevented = false;
             return Ok(());
         }
@@ -299,7 +363,7 @@ impl Policy {
                 || now.saturating_sub(cycle.started_at) > 86_400
         }) {
             self.cancel_temporary();
-            controller.release()?;
+            let _ = self.settle(controller);
             return Err(Error::PlatformError(
                 "calibration cancelled: clock changed or 24-hour timeout".into(),
             ));
@@ -518,12 +582,14 @@ mod tests {
             self.led = mode;
             Ok(())
         }
-        fn release(&mut self) -> Result<()> {
+        fn release(&mut self, scope: Release) -> Result<()> {
             self.enabled = true;
-            self.stop = None;
             self.discharge = false;
             self.awake = false;
             self.led = LedMode::System;
+            if scope == Release::Everything {
+                self.stop = None;
+            }
             Ok(())
         }
         fn force_discharge(&mut self, v: bool) -> Result<()> {
@@ -695,6 +761,10 @@ mod tests {
                 Capabilities::unsupported("fixture")
             }
             fn apply(&mut self, _: Option<u8>, _: Option<u8>) -> Result<()> {
+                self.0 = true;
+                Ok(())
+            }
+            fn release(&mut self, _: Release) -> Result<()> {
                 self.0 = true;
                 Ok(())
             }

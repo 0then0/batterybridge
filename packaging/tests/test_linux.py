@@ -13,7 +13,7 @@ spec.loader.exec_module(builder)
 
 
 class LinuxPackageTests(unittest.TestCase):
-    def run_hook(self, package, hook, argument, *, cli=0, stop=0, status=0, manual=False):
+    def run_hook(self, package, hook, argument, *, cli=0, stop=0, status=0, manual=False, active=True, reset=0):
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
             trace = root / 'trace'
@@ -26,8 +26,8 @@ class LinuxPackageTests(unittest.TestCase):
                 (root / 'manual.service').touch()
             replacements = {
                 '/etc/systemd/system/batterybridge.service': str(root / 'manual.service'),
-                'systemctl': command('systemctl', f'case "$1" in stop) exit {stop};; show) echo {status};; esac'),
-                '/usr/bin/batterybridge': command('client', f'exit {cli}'),
+                'systemctl': command('systemctl', f'case "$1" in stop) exit {stop};; show) echo {status};; is-active) exit {0 if active else 3};; esac'),
+                '/usr/bin/batterybridge': command('client', f'case "$1" in reset) exit {reset};; *) exit {cli};; esac'),
                 'sleep 1': command('sleep', 'exit 0'),
                 'getent': command('getent', 'exit 0'),
                 '/run/systemd/system': str(root),
@@ -58,13 +58,36 @@ class LinuxPackageTests(unittest.TestCase):
             self.assertNotEqual(result.returncode, 0)
             self.assertEqual(trace.count('client config'), 10)
 
-    def test_remove_releases_hardware_but_upgrade_keeps_service_registration(self):
+    def test_remove_resets_then_stops_and_upgrade_keeps_registration_and_saved_limit(self):
         for package, remove, upgrade in [('deb', 'remove', 'upgrade'), ('rpm', '0', '1')]:
             result, trace = self.run_hook(package, 'preremove', remove)
             self.assertEqual(result.returncode, 0, result.stderr)
+            # Stopping no longer clears a saved native threshold: reset must come first.
+            self.assertLess(trace.index('client reset'), trace.index('stop'))
             self.assertLess(trace.index('stop'), trace.index('disable'))
+            self.assertNotIn('start', trace.replace('restart', ''))
             result, trace = self.run_hook(package, 'preremove', upgrade)
             self.assertEqual(result.returncode, 0, result.stderr)
+            self.assertEqual(trace, '')
+
+    def test_remove_starts_a_stopped_service_so_reset_can_reach_the_hardware(self):
+        for package, remove in [('deb', 'remove'), ('rpm', '0')]:
+            result, trace = self.run_hook(package, 'preremove', remove, active=False)
+            self.assertEqual(result.returncode, 0, result.stderr)
+            self.assertLess(trace.index('systemctl start'), trace.index('client config'))
+            self.assertLess(trace.index('client config'), trace.index('client reset'))
+            self.assertLess(trace.index('client reset'), trace.index('systemctl stop'))
+            result, trace = self.run_hook(package, 'preremove', remove, active=False, cli=1)
+            self.assertNotEqual(result.returncode, 0)
+            self.assertNotIn('client reset', trace)
+            self.assertNotIn('disable', trace)
+
+    def test_failed_reset_or_unclean_stop_blocks_removal_without_unregistering(self):
+        for package, remove in [('deb', 'remove'), ('rpm', '0')]:
+            result, trace = self.run_hook(package, 'preremove', remove, reset=1)
+            self.assertNotEqual(result.returncode, 0)
+            self.assertIn('Normal charging could not be restored', result.stderr)
+            self.assertNotIn('systemctl stop', trace)
             self.assertNotIn('disable', trace)
             for failure in ({'stop': 1}, {'status': 1}):
                 result, trace = self.run_hook(package, 'preremove', remove, **failure)

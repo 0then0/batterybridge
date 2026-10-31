@@ -18,6 +18,7 @@ For graphical installation on each supported platform, start with [Install Batte
 - [Battery care and schedules](battery-care.md): temporary operations, temperature protection, calibration, telemetry and automation.
 - [Configuration and charging policies](configuration.md): thresholds, top-up and persistence.
 - [Service installation and recovery](service.md): systemd, launchd and Windows Task Scheduler.
+- [Lifecycle: stop, sleep, pause, reset and removal](lifecycle.md): what each action leaves on the hardware, per backend.
 - [Hardware compatibility and validation](hardware.md): backend capabilities, limitations and device testing.
 - [Security and IPC](security.md): privileges, local access and diagnostic privacy.
 
