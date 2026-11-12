@@ -21,7 +21,7 @@ egui = { version = "=0.36.2", features = ["serde"] }
 fastframe-shell = { git = "https://github.com/crmne/fastframe", tag = "v0.14.1" }
 fastframe-tray = { git = "https://github.com/crmne/fastframe", tag = "v0.14.1" }
 fastframe-fonts = { git = "https://github.com/crmne/fastframe", tag = "v0.14.1" }
-fastframe-i18n = { git = "https://github.com/crmne/fastframe", tag = "v0.14.1" }
+fastframe-i18n = { git = "https://github.com/crmne/fastframe", tag = "v0.15.2" }
 fastframe-autostart = { git = "https://github.com/crmne/fastframe", tag = "v0.14.1" }
 
 [target.'cfg(target_os = "macos")'.dependencies]
