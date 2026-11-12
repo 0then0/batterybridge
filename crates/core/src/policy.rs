@@ -262,10 +262,15 @@ impl Policy {
     /// saved policy. Nothing here distinguishes a service restart from an OS
     /// shutdown, because the process cannot tell them apart reliably.
     pub fn shutdown(&mut self, controller: &mut dyn ChargeController) -> Result<()> {
+        self.end_temporary();
+        self.settle(controller)
+    }
+    /// End temporary modes but keep a pause: pause lasts until `resume`,
+    /// a policy change or a restart, never until an unrelated failure.
+    pub fn end_temporary(&mut self) {
         let paused = self.runtime.paused;
         self.cancel_temporary();
         self.runtime.paused = paused;
-        self.settle(controller)
     }
     /// Bring the hardware to the saved, non-temporary policy without clearing a
     /// native threshold: daemon-held overrides end and the saved threshold is
@@ -499,9 +504,13 @@ impl Policy {
         discharging: bool,
     ) -> Result<()> {
         let caps = controller.capabilities();
+        // The assertion can keep a closed-lid Mac awake on AC, so charging must be
+        // observed, not only requested: a battery that firmware refuses to charge
+        // must not hold the system awake indefinitely.
+        let observed_charging = charging && battery.state.eq_ignore_ascii_case("charging");
         let awake = self.config.care.prevent_sleep
             && battery.on_ac == Some(true)
-            && (charging || discharging);
+            && (observed_charging || discharging);
         if caps.sleep_prevention.available() {
             match controller.prevent_sleep(awake) {
                 Ok(()) => self.runtime.sleep_prevented = awake,
@@ -632,6 +641,42 @@ mod tests {
         p.tick(&mut f, &battery(85)).unwrap();
         p.prepare_sleep(&mut f).unwrap();
         assert!(f.enabled, "explicit top-up remains allowed during sleep");
+    }
+    #[test]
+    fn sleep_assertion_is_held_only_while_charging_toward_the_limit_is_observed_on_ac() {
+        let mut f = Fake::default();
+        let caps = f.capabilities();
+        let mut p = Policy::default();
+        p.set_limit(Some(80), None, &caps).unwrap();
+        p.set_care(
+            CareSettings {
+                prevent_sleep: true,
+                ..CareSettings::default()
+            },
+            &caps,
+        )
+        .unwrap();
+        // 43% on AC and charging: keep the (closed-lid) Mac awake until the limit.
+        p.tick(&mut f, &battery(43)).unwrap();
+        assert!(f.enabled && f.awake);
+        assert!(p.runtime.sleep_prevented);
+        // Limit reached: the gate closes and the system may sleep again.
+        p.tick(&mut f, &battery(80)).unwrap();
+        assert!(!f.enabled && !f.awake);
+        // Below the resume threshold, but firmware does not charge: no assertion.
+        let mut held = battery(60);
+        held.state = "not charging".into();
+        p.tick(&mut f, &held).unwrap();
+        assert!(f.enabled && !f.awake);
+        // On battery power there is nothing to wait for.
+        let mut unplugged = battery(60);
+        unplugged.on_ac = Some(false);
+        p.tick(&mut f, &unplugged).unwrap();
+        assert!(!f.awake);
+        // Without the opt-in setting nothing is held.
+        p.set_care(CareSettings::default(), &caps).unwrap();
+        p.tick(&mut f, &battery(43)).unwrap();
+        assert!(f.enabled && !f.awake);
     }
     #[test]
     fn sleep_still_inhibits_charging_when_releasing_idle_assertion_fails() {

@@ -122,7 +122,7 @@ pub fn resolve(facts: Facts) -> ProbeReport {
                     Capability::experimental("daemon temporarily releases gate until full");
                 caps.manual_charging = caps.charge_limit.clone();
                 caps.sleep_prevention = Capability::supported(
-                    "scoped idle-sleep assertion; lid-close and manual sleep remain possible",
+                    "scoped system-sleep assertion while charging or discharging on AC; holds closed-lid sleep until the limit",
                 );
                 if facts
                     .batteries

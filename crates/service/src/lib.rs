@@ -73,14 +73,15 @@ impl Service {
             }
             Err(e) => {
                 // Ephemeral modes are cancelled on errors, never restarted blindly.
-                self.policy.cancel_temporary();
+                // A pause is kept: a failed read must not re-impose the limit.
+                self.policy.end_temporary();
                 // An enforcement error must not leave a latched gate or a temporary
                 // override. A saved native threshold is re-asserted, not cleared:
                 // it does not depend on the failed read. The error stays visible.
                 if let Some(c) = &mut self.controller {
                     let _ = self.policy.settle(c.as_mut());
                 }
-                if self.policy.config.care.heat_limit_c.is_some() {
+                if !self.policy.runtime.paused && self.policy.config.care.heat_limit_c.is_some() {
                     self.policy.runtime.heat_paused = true;
                     if let Some(controller) = &mut self.controller {
                         let _ = controller.charging(false);
@@ -168,14 +169,12 @@ impl Service {
             let _ = controller.release(Release::Overrides);
         }
         let mut previous = self.policy.clone();
-        let paused = previous.runtime.paused;
-        previous.cancel_temporary();
-        previous.runtime.paused = paused;
+        previous.end_temporary();
         if self.apply_policy(&mut previous).is_err()
             && let Some(controller) = &mut self.controller
         {
             let _ = previous.settle(controller.as_mut());
-            if previous.config.care.heat_limit_c.is_some() {
+            if !previous.runtime.paused && previous.config.care.heat_limit_c.is_some() {
                 let _ = controller.charging(false);
             }
         }

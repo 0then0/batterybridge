@@ -3,6 +3,23 @@
 User-visible changes are grouped by release. Links point to the corresponding
 GitHub releases and comparisons; hardware capabilities remain device-dependent.
 
+## [Unreleased]
+
+### Changed
+
+- macOS: the opt-in sleep prevention setting (`prevent_sleep`) now holds a
+  `PreventSystemSleep` assertion instead of an idle-sleep one, and only while the
+  battery reports that it is charging (or a forced discharge runs) on AC. A Mac
+  closed on AC below its limit stays awake with the display off until it reaches
+  the limit, then sleeps. Without the setting, a sleeping Mac with a limit below
+  100% still does not charge.
+
+### Fixed
+
+- A failed reconciliation while paused (for example an unreadable battery) no
+  longer ends the pause, re-applies the saved threshold or closes the charging
+  gate for temperature protection.
+
 ## [0.4.0] - 2026-10-31
 
 ### Changed
@@ -115,6 +132,7 @@ GitHub releases and comparisons; hardware capabilities remain device-dependent.
 - Initial stable release with cross-platform monitoring, capability discovery,
   supported charge controls, a background service and a localized tray app.
 
+[Unreleased]: https://github.com/0then0/batterybridge/compare/v0.4.0...HEAD
 [0.4.0]: https://github.com/0then0/batterybridge/compare/v0.3.1...v0.4.0
 [0.3.1]: https://github.com/0then0/batterybridge/compare/v0.3.0...v0.3.1
 [0.3.0]: https://github.com/0then0/batterybridge/compare/v0.2.0...v0.3.0

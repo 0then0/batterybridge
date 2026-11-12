@@ -89,6 +89,6 @@ Intel BCLM interface reference: [bclm implementation](https://github.com/zackeli
 
 ## Advanced care validation
 
-The software tests use synthetic controllers and sensors for temperature hysteresis, missing telemetry, calibration phase transitions, the 10% calibration-only floor, cancellation, idle assertions and schedule persistence. They do not establish SMC write compatibility, MagSafe response, closed-lid enforcement or calibration accuracy on a real device. Validate those features separately under supervision, and keep their capability state experimental until a device report is recorded.
+The software tests use synthetic controllers and sensors for temperature hysteresis, missing telemetry, calibration phase transitions, the 10% calibration-only floor, cancellation, sleep assertions and schedule persistence. They do not establish SMC write compatibility, MagSafe response, closed-lid enforcement or calibration accuracy on a real device. Validate those features separately under supervision, and keep their capability state experimental until a device report is recorded.
 
 New adapter and LED values were implemented using the public BSD-3-Clause [Battery Toolkit interface reference](https://github.com/mhaeuser/Battery-Toolkit). Its notice is included in `assets/licenses` and native packages. AlDente’s current application is proprietary; BatteryBridge implements public behavior independently and does not embed its code or assets.

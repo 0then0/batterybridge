@@ -141,11 +141,13 @@ unsafe extern "C" {
     -> Cf;
     fn CFRelease(value: Cf);
 }
-/// A process-scoped idle assertion. The OS also releases it if the service crashes.
-/// It deliberately does not change global sleep settings or prevent lid-close/manual sleep.
+/// A process-scoped `PreventSystemSleep` assertion. On AC power it also keeps a
+/// closed-lid Mac in dark wake, so the service can stop charging at the limit
+/// before the system sleeps; macOS ignores it on battery power. The OS releases
+/// it if the service crashes. Global sleep settings are never changed.
 #[derive(Default)]
-pub struct IdleAssertion(Option<u32>);
-impl IdleAssertion {
+pub struct SleepAssertion(Option<u32>);
+impl SleepAssertion {
     pub fn set(&mut self, enabled: bool) -> Result<()> {
         if !enabled {
             if let Some(id) = self.0 {
@@ -153,7 +155,7 @@ impl IdleAssertion {
                 let result = unsafe { IOPMAssertionRelease(id) };
                 if result != 0 {
                     return Err(Error::PlatformError(format!(
-                        "release idle assertion: {result}"
+                        "release sleep assertion: {result}"
                     )));
                 }
                 self.0 = None;
@@ -164,7 +166,7 @@ impl IdleAssertion {
             let result = unsafe {
                 let kind = CFStringCreateWithCString(
                     ptr::null(),
-                    c"PreventUserIdleSystemSleep".as_ptr(),
+                    c"PreventSystemSleep".as_ptr(),
                     0x08000100,
                 );
                 let name = CFStringCreateWithCString(
@@ -180,7 +182,7 @@ impl IdleAssertion {
                         CFRelease(name);
                     }
                     return Err(Error::PlatformError(
-                        "allocate idle assertion strings".into(),
+                        "allocate sleep assertion strings".into(),
                     ));
                 }
                 let mut id = 0;
@@ -194,14 +196,14 @@ impl IdleAssertion {
             };
             if result != 0 {
                 return Err(Error::PlatformError(format!(
-                    "create idle assertion: {result}"
+                    "create sleep assertion: {result}"
                 )));
             }
         }
         Ok(())
     }
 }
-impl Drop for IdleAssertion {
+impl Drop for SleepAssertion {
     fn drop(&mut self) {
         let _ = self.set(false);
     }

@@ -14,12 +14,12 @@ when the service is not running:
   that only means something while the service watches the battery and reopens it.
   A closed gate stops charging completely, so it is never left behind.
 - **Overrides.** Forced discharge (adapter gate), the MagSafe light override and
-  the idle-sleep assertion. These exist only while the service maintains them.
+  the sleep assertion. These exist only while the service maintains them.
 
 Backends combine these differently, so the service never uses one "release"
 for everything. Each hardware release names its scope:
 
-- `Overrides`: forced discharge, charging gate (reopened), MagSafe light, idle-sleep
+- `Overrides`: forced discharge, charging gate (reopened), MagSafe light, sleep
   assertion. Native thresholds are untouched.
 - `Everything`: the above plus every native threshold, returning to normal charging.
 
@@ -64,8 +64,10 @@ A stop never removes a saved limit, so a threshold-only backend (Linux, Lenovo, 
 enforced without the service, so charging is simply allowed until the service starts again.
 
 **Sleep (macOS notifications).** The saved policy and native thresholds are kept.
-Forced discharge and the idle assertion end, and a gate is closed for limits below
-100% because the service cannot enforce while asleep. Preparation steps are independent
+Forced discharge and the sleep assertion end, and a gate is closed for limits below
+100% because the service cannot enforce while asleep, so a sleeping Mac does not charge.
+With `prevent_sleep` enabled on AC, a closed lid does not start sleep while charging toward
+the limit; see [battery care](battery-care.md#temperature-protection-and-automatic-discharge). Preparation steps are independent
 and a failure remains visible in status. After wake the service rewrites the hardware from the policy;
 until that finishes, status reports that the hardware state is not yet verified. Linux
 and Windows have no sleep notification; the next 30-second reconciliation after resume
@@ -73,7 +75,7 @@ rewrites the threshold.
 
 **Pause** (`batterybridge pause`, tray, GUI). Releases `Everything`: the percentage limit
 (including a native threshold), the charging gate, forced discharge, the MagSafe light
-and idle-sleep override. Normal charging is allowed. The saved limit, care settings
+and sleep-assertion override. Normal charging is allowed. The saved limit, care settings
 and schedules are kept, and `resume` re-applies them. Pause is runtime-only: restarting
 the service ends it and re-applies the saved policy. Stopping the service while paused
 leaves the hardware released.

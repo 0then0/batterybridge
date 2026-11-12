@@ -21,7 +21,7 @@ Available controls depend on your laptop's kernel driver, firmware and vendor in
 - Configure temperature protection, automatic discharge and calibration on compatible SMC hardware.
 - Schedule charging actions by local calendar time, including monthly tasks.
 - Read available temperature, voltage, current, power, cycles and raw capacity information.
-- Control compatible MagSafe lights and prevent idle sleep during active battery care.
+- Control compatible MagSafe lights and keep a Mac awake on AC (including with the lid closed) until it charges to the limit.
 - Use installed CLI commands from macOS Shortcuts.
 - Keep charging settings active through a separate background service.
 - Optionally launch the GUI in the tray at login, independently of that service.

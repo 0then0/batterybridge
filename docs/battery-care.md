@@ -22,7 +22,7 @@ batterybridge adapter on
 - `charge-to` charges to the requested level and maintains that temporary target until cancellation. It can override a lower saved limit. It does not force an already higher battery percentage down.
 - `discharge` uses battery power while plugged in until its target, then restores the saved limit. The minimum is 20%.
 - `hold` stops charging immediately until cancellation; it requires a real charging gate.
-- `pause` releases all BatteryBridge hardware controls: the percentage limit (including a native threshold), the charging gate, forced discharge, LED and idle-sleep overrides. Normal charging is allowed. Saved settings are retained; `resume` restores them. Pause lasts until `resume` or a service restart, which re-applies the saved policy.
+- `pause` releases all BatteryBridge hardware controls: the percentage limit (including a native threshold), the charging gate, forced discharge, LED and sleep-assertion overrides. Normal charging is allowed. Saved settings are retained; `resume` restores them. Pause lasts until `resume` or a service restart, which re-applies the saved policy.
 - `cancel` restores the saved policy and ends temporary operations. It also suppresses automatic discharge until `resume`, a limit change or service restart, so cancellation does not immediately start another discharge.
 - `adapter off` is bounded discharge to 20%, not indefinite power isolation. `adapter on` restores the saved policy. Both require adapter-gate support.
 
@@ -38,13 +38,15 @@ Temperature protection requires a battery temperature sensor and a charging gate
 
 Automatic discharge reduces charge above the saved limit when AC is connected and the adapter gate permits it. Saved limits below 20% are incompatible with this mode. It never runs during a temporary charge target or top-up. Turning automatic discharge off ends an automatic discharge already in progress; it does not cancel an explicitly requested manual discharge.
 
-On macOS, **Prevent idle sleep** holds a process-scoped assertion during active charging/discharging on AC. It does not prevent lid-close or manual sleep. BatteryBridge does not alter global sleep settings. Software limits during closed-lid sleep are not guaranteed.
+On macOS, **Keep the Mac awake while charging or discharging on AC** (`prevent_sleep`) holds a process-scoped `PreventSystemSleep` assertion while the battery reports that it is charging toward the limit, or while a forced discharge runs, on AC. With the lid closed the Mac then stays awake with the display off, the service keeps enforcing, and once the limit is reached and charging stops the assertion is released and the Mac sleeps. A battery that firmware does not charge does not hold the assertion. macOS ignores it on battery power. BatteryBridge does not alter global sleep settings.
 
-Failures of the MagSafe light or idle-sleep assertion are reported in service status
+Without this setting, a saved limit below 100% means **no charging during sleep**: before sleep the service stops charging, because it cannot enforce the limit while asleep. A Mac that sleeps with the lid closed on AC therefore stays at its current percentage until it wakes. Whether macOS keeps a closed-lid Mac in dark wake under this assertion on every model is not yet recorded by a device report; if the system sleeps anyway, the behavior falls back to stopping charging before sleep.
+
+Failures of the MagSafe light or sleep assertion are reported in service status
 without releasing the charging limit. A successful settings update confirms that
 preferences were saved; check service status for hardware diagnostics. Before sleep,
 the service requests charging inhibition for saved limits and temporary targets below
-100%, even if releasing the idle assertion fails. An explicit top-up or 100% temporary
+100%, even if releasing the sleep assertion fails. An explicit top-up or 100% temporary
 target remains allowed to charge.
 
 ## Calibration

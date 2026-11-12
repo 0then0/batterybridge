@@ -81,7 +81,7 @@ pub fn controller() -> Result<Box<dyn ChargeController>> {
                 .get("SMC:BCLM")
                 .is_some_and(|value| value == "available"),
         caps: platform.report.capabilities,
-        awake: power::IdleAssertion::default(),
+        awake: power::SleepAssertion::default(),
         led_overridden: false,
     }))
 }
@@ -89,7 +89,7 @@ struct Controller {
     smc: smc::Smc,
     caps: Capabilities,
     bclm: bool,
-    awake: power::IdleAssertion,
+    awake: power::SleepAssertion,
     led_overridden: bool,
 }
 impl ChargeController for Controller {
@@ -129,7 +129,7 @@ impl ChargeController for Controller {
         batterybridge_core::policy::require(&self.caps.sleep_prevention)?;
         self.awake.set(enabled)
     }
-    /// Daemon-held: idle assertion, LED override, adapter (forced discharge)
+    /// Daemon-held: sleep assertion, LED override, adapter (forced discharge)
     /// gate and the charging gate. They are always reopened because nothing
     /// maintains them once the service is gone and a closed gate stops charging
     /// entirely. Native: the Intel `BCLM` firmware threshold, which only
@@ -158,7 +158,7 @@ impl ChargeController for Controller {
             Ok(())
         };
         merge_steps([
-            ("idle-sleep assertion", awake),
+            ("sleep assertion", awake),
             ("MagSafe LED", led),
             ("forced discharge", discharge),
             ("charging gate", gate),

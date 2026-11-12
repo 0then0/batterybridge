@@ -89,7 +89,7 @@ pub fn reason(locale: &str, original: &str) -> String {
         "Lenovo WMI conservation mode, fixed 80%; device write compatibility is unverified" => {
             "reasonLenovo"
         }
-        "scoped idle-sleep assertion; lid-close and manual sleep remain possible" => {
+        "scoped system-sleep assertion while charging or discharging on AC; holds closed-lid sleep until the limit" => {
             "preventSleepHelp"
         }
         "battery temperature sensor and SMC charging gate" => "heatHelp",

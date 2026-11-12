@@ -78,6 +78,7 @@ impl ChargeController for Backend {
             c.adapter_disable = c.charge_limit.clone();
             c.magsafe_led = c.charge_limit.clone();
             c.sleep_prevention = c.charge_limit.clone();
+            c.heat_protection = c.charge_limit.clone();
         }
         c
     }
@@ -508,6 +509,35 @@ fn pause_releases_everything_keeps_the_saved_policy_and_resume_restores_it() {
     rig.expect_ok(Command::Resume);
     assert_eq!(rig.hw.borrow().threshold, Some(80));
     assert!(!rig.status().runtime.paused);
+}
+#[test]
+fn a_failed_reconciliation_while_paused_keeps_the_pause_and_reimposes_nothing() {
+    for kind in [Kind::Threshold, Kind::Gate, Kind::Both] {
+        let mut rig = Rig::new(kind, 74);
+        rig.limit(80);
+        if kind != Kind::Threshold {
+            // Heat protection must not close the gate of a paused service either.
+            rig.service.policy.config.care.heat_limit_c = Some(45);
+        }
+        rig.expect_ok(Command::Pause);
+        rig.service.platform.monitor = Box::new(NoBattery);
+        rig.clear_ops();
+        rig.service.tick();
+        let hw = rig.hw.borrow();
+        assert_eq!(hw.threshold, None, "{kind:?}: {:?}", hw.ops);
+        assert!(hw.gate_open, "{kind:?}: {:?}", hw.ops);
+        drop(hw);
+        assert!(rig.service.policy.runtime.paused, "{kind:?}");
+        assert!(rig.service.last_error.is_some());
+        rig.service.platform.monitor = Box::new(Pct(rig.percent.clone()));
+        rig.service.tick();
+        assert_eq!(rig.hw.borrow().threshold, None, "{kind:?}");
+        assert!(rig.status().runtime.paused);
+        rig.expect_ok(Command::Resume);
+        if kind == Kind::Threshold {
+            assert_eq!(rig.hw.borrow().threshold, Some(80), "{kind:?}");
+        }
+    }
 }
 #[test]
 fn stopping_while_paused_honours_the_pause_and_the_next_start_resumes_control() {
