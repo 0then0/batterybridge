@@ -284,6 +284,7 @@ fn build(kind: Kind, path: &Path, hw: &Rc<RefCell<Hw>>, percent: &Rc<Cell<u8>>) 
         schedule_error: None,
         stopping: false,
         awaiting_wake: false,
+        sleep_held: false,
     }
 }
 use std::path::{Path, PathBuf};
@@ -772,6 +773,65 @@ fn a_native_only_backend_has_nothing_to_release_under_overrides() {
     assert_eq!(rig.hw.borrow().threshold, Some(80));
     backend.release(Release::Everything).unwrap();
     assert_eq!(rig.hw.borrow().threshold, None);
+}
+
+// A closed lid on AC with the sleep assertion held is dark wake, not sleep.
+#[test]
+fn a_held_sleep_assertion_keeps_charging_through_the_sleep_notice_until_the_limit() {
+    let mut rig = Rig::new(Kind::Gate, 54);
+    rig.limit(80);
+    rig.service.policy.config.care.prevent_sleep = true;
+    rig.service.tick();
+    assert!(rig.hw.borrow().awake && rig.hw.borrow().gate_open);
+    rig.service.prepare_sleep().unwrap();
+    assert!(rig.service.holds_sleep());
+    {
+        let hw = rig.hw.borrow();
+        assert!(hw.awake, "the assertion that keeps dark wake is kept");
+        assert!(hw.gate_open, "charging toward the limit continues");
+    }
+    rig.service.tick();
+    assert!(rig.hw.borrow().gate_open);
+    rig.percent.set(80);
+    rig.service.tick();
+    let hw = rig.hw.borrow();
+    assert!(!hw.gate_open && !hw.awake, "{:?}", hw.ops);
+    drop(hw);
+    assert!(!rig.service.holds_sleep());
+    assert!(matches!(
+        rig.status().last_error,
+        Some(Error::PlatformError(m)) if m.contains("not yet verified")
+    ));
+    rig.service.wake();
+    assert_eq!(rig.status().last_error, None);
+}
+#[test]
+fn without_ac_or_assertion_sleep_is_prepared_immediately() {
+    let mut rig = Rig::new(Kind::Gate, 54);
+    rig.limit(80);
+    rig.service.tick();
+    assert!(!rig.hw.borrow().awake);
+    rig.service.prepare_sleep().unwrap();
+    assert!(!rig.service.holds_sleep());
+    assert!(!rig.hw.borrow().gate_open);
+    rig.service.wake();
+    rig.service.policy.config.care.prevent_sleep = true;
+    rig.service.tick();
+    assert!(rig.hw.borrow().awake);
+    rig.service.platform.monitor = Box::new(OnBattery);
+    rig.service.prepare_sleep().unwrap();
+    assert!(!rig.service.holds_sleep());
+    let hw = rig.hw.borrow();
+    assert!(!hw.gate_open && !hw.awake, "{:?}", hw.ops);
+}
+struct OnBattery;
+impl BatteryMonitor for OnBattery {
+    fn batteries(&self) -> Result<Vec<BatteryStatus>> {
+        let mut battery = Pct(Rc::new(Cell::new(54))).batteries()?;
+        battery[0].on_ac = Some(false);
+        battery[0].state = "discharging".into();
+        Ok(battery)
+    }
 }
 
 const UNREADABLE: u8 = 255;

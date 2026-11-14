@@ -67,7 +67,8 @@ enforced without the service, so charging is simply allowed until the service st
 Forced discharge and the sleep assertion end, and a gate is closed for limits below
 100% because the service cannot enforce while asleep, so a sleeping Mac does not charge.
 With `prevent_sleep` enabled on AC, a closed lid does not start sleep while charging toward
-the limit; see [battery care](battery-care.md#temperature-protection-and-automatic-discharge). Preparation steps are independent
+the limit: the sleep notice is deferred, reconciliation continues in dark wake, and the
+sleep preparation runs once the limit is reached; see [battery care](battery-care.md#temperature-protection-and-automatic-discharge). Preparation steps are independent
 and a failure remains visible in status. After wake the service rewrites the hardware from the policy;
 until that finishes, status reports that the hardware state is not yet verified. Linux
 and Windows have no sleep notification; the next 30-second reconciliation after resume

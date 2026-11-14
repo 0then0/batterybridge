@@ -104,7 +104,7 @@ fn run() -> Result<()> {
     let mut next_tick = Instant::now() + interval;
     loop {
         if Instant::now() >= next_tick {
-            if !sleeping.load(Ordering::SeqCst) {
+            if !sleeping.load(Ordering::SeqCst) || service.holds_sleep() {
                 service.tick();
             }
             next_tick = Instant::now() + interval;

@@ -17,6 +17,9 @@ pub struct Service {
     stopping: bool,
     /// Between sleep preparation and the first reconciliation after wake the hardware state is unverified.
     awaiting_wake: bool,
+    /// macOS announced sleep while our `PreventSystemSleep` assertion was held on AC.
+    /// The system stays in dark wake, so enforcement continues until the assertion ends.
+    sleep_held: bool,
 }
 impl Service {
     pub fn new(platform: Platform, path: PathBuf) -> Result<Self> {
@@ -35,6 +38,7 @@ impl Service {
             schedule_error: None,
             stopping: false,
             awaiting_wake: false,
+            sleep_held: false,
         })
     }
     fn apply_policy(&mut self, next: &mut Policy) -> Result<()> {
@@ -93,6 +97,18 @@ impl Service {
                 self.last_error = Some(e);
             }
         }
+        // The charge reached the limit (or charging ended): finish the sleep
+        // preparation that was deferred while the assertion kept the Mac awake.
+        if self.sleep_held && !self.policy.runtime.sleep_prevented {
+            self.sleep_held = false;
+            if let Err(error) = self.prepare_sleep() {
+                tracing::error!(error=%error, "failed to prepare charging for sleep");
+            }
+        }
+    }
+    /// Whether the main loop must keep reconciling although macOS announced sleep.
+    pub fn holds_sleep(&self) -> bool {
+        self.sleep_held
     }
     fn run_schedules(&mut self, now: i64) -> Result<()> {
         // Claim every due task durably before touching hardware. Missed runs coalesce.
@@ -124,6 +140,20 @@ impl Service {
         if self.stopping {
             return Ok(());
         }
+        // On AC our `PreventSystemSleep` assertion turns a lid close into dark
+        // wake, yet macOS still announces sleep to power clients. Releasing the
+        // assertion and closing the gate here would end the very charge it holds
+        // the system awake for, so enforcement continues until the limit.
+        let on_ac = self
+            .platform
+            .monitor
+            .batteries()
+            .ok()
+            .and_then(|batteries| batteries.first().and_then(|battery| battery.on_ac));
+        if self.policy.runtime.sleep_prevented && on_ac == Some(true) {
+            self.sleep_held = true;
+            return Ok(());
+        }
         // Until `wake` reconciles, firmware may have changed anything we set.
         self.awaiting_wake = true;
         let result = match &mut self.controller {
@@ -139,6 +169,7 @@ impl Service {
     }
     /// Re-read and rewrite the hardware before the saved policy is reported as restored.
     pub fn wake(&mut self) {
+        self.sleep_held = false;
         self.tick();
         self.awaiting_wake = false;
     }
@@ -360,6 +391,7 @@ mod tests {
             schedule_error: None,
             stopping: false,
             awaiting_wake: false,
+            sleep_held: false,
         }
     }
     fn dir() -> PathBuf {

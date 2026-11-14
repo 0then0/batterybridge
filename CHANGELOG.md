@@ -3,6 +3,15 @@
 User-visible changes are grouped by release. Links point to the corresponding
 GitHub releases and comparisons; hardware capabilities remain device-dependent.
 
+## [Unreleased]
+
+### Fixed
+
+- macOS: with `prevent_sleep` enabled, closing the lid on AC no longer drops the
+  sleep assertion and stops charging. macOS announces sleep when the closed lid
+  enters dark wake; the service now keeps the assertion, keeps enforcing in dark
+  wake and prepares for sleep once the limit is reached.
+
 ## [0.4.1] - 2026-11-12
 
 ### Changed
@@ -132,6 +141,7 @@ GitHub releases and comparisons; hardware capabilities remain device-dependent.
 - Initial stable release with cross-platform monitoring, capability discovery,
   supported charge controls, a background service and a localized tray app.
 
+[Unreleased]: https://github.com/0then0/batterybridge/compare/v0.4.1...HEAD
 [0.4.1]: https://github.com/0then0/batterybridge/compare/v0.4.0...v0.4.1
 [0.4.0]: https://github.com/0then0/batterybridge/compare/v0.3.1...v0.4.0
 [0.3.1]: https://github.com/0then0/batterybridge/compare/v0.3.0...v0.3.1
