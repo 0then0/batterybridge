@@ -426,12 +426,12 @@ impl Resident for App {
             return false;
         };
         tray.create_item();
-        if !tray.is_shown() {
-            return false;
-        }
+        let shown = tray.is_shown();
         #[cfg(target_os = "macos")]
-        fastframe_dock::set_dock_icon_visible(false);
-        true
+        if shown {
+            fastframe_dock::set_dock_icon_visible(false);
+        }
+        shown
     }
     fn closed(&self) -> Closed {
         if self.hide && !self.quit {
