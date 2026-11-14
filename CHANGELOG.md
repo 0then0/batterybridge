@@ -3,7 +3,7 @@
 User-visible changes are grouped by release. Links point to the corresponding
 GitHub releases and comparisons; hardware capabilities remain device-dependent.
 
-## [Unreleased]
+## [0.4.2] - 2026-11-14
 
 ### Fixed
 
@@ -141,7 +141,7 @@ GitHub releases and comparisons; hardware capabilities remain device-dependent.
 - Initial stable release with cross-platform monitoring, capability discovery,
   supported charge controls, a background service and a localized tray app.
 
-[Unreleased]: https://github.com/0then0/batterybridge/compare/v0.4.1...HEAD
+[0.4.2]: https://github.com/0then0/batterybridge/compare/v0.4.1...v0.4.2
 [0.4.1]: https://github.com/0then0/batterybridge/compare/v0.4.0...v0.4.1
 [0.4.0]: https://github.com/0then0/batterybridge/compare/v0.3.1...v0.4.0
 [0.3.1]: https://github.com/0then0/batterybridge/compare/v0.3.0...v0.3.1
