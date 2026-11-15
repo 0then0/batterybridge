@@ -3,6 +3,17 @@
 User-visible changes are grouped by release. Links point to the corresponding
 GitHub releases and comparisons; hardware capabilities remain device-dependent.
 
+## [0.4.3] - 2026-11-15
+
+### Fixed
+
+- macOS: plugging in shortly before closing the lid no longer lets the Mac
+  sleep with charging stopped. The service reconciles when sleep is announced,
+  and the sleep assertion is held for up to two minutes while the battery status
+  catches up with a gate that has just opened.
+- macOS: an SMC write whose readback lags briefly, such as around a sleep
+  transition, is re-read before it is reported as a mismatch.
+
 ## [0.4.2] - 2026-11-14
 
 ### Fixed
@@ -141,6 +152,7 @@ GitHub releases and comparisons; hardware capabilities remain device-dependent.
 - Initial stable release with cross-platform monitoring, capability discovery,
   supported charge controls, a background service and a localized tray app.
 
+[0.4.3]: https://github.com/0then0/batterybridge/compare/v0.4.2...v0.4.3
 [0.4.2]: https://github.com/0then0/batterybridge/compare/v0.4.1...v0.4.2
 [0.4.1]: https://github.com/0then0/batterybridge/compare/v0.4.0...v0.4.1
 [0.4.0]: https://github.com/0then0/batterybridge/compare/v0.3.1...v0.4.0
