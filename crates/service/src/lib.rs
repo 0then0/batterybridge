@@ -136,6 +136,14 @@ impl Service {
         self.schedule_error = error.clone();
         error.map_or(Ok(()), Err)
     }
+    /// macOS announced sleep: reconcile first, since the last tick may predate
+    /// a just-connected adapter, then prepare (or defer) sleep on fresh state.
+    pub fn sleep_requested(&mut self) -> Result<()> {
+        if !self.sleep_held {
+            self.tick();
+        }
+        self.prepare_sleep()
+    }
     pub fn prepare_sleep(&mut self) -> Result<()> {
         if self.stopping {
             return Ok(());

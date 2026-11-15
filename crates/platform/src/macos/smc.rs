@@ -186,10 +186,17 @@ impl Smc {
         };
         input.bytes[..value.len()].copy_from_slice(value);
         self.call(input)?;
-        if self.read(key, value.len())? != value {
-            return Err(Error::HardwareError("SMC write readback mismatch".into()));
+        // Firmware may apply a write a moment later, e.g. around a sleep
+        // transition, so a stale first readback is retried briefly.
+        for attempt in 0..5 {
+            if self.read(key, value.len())? == value {
+                return Ok(());
+            }
+            if attempt < 4 {
+                std::thread::sleep(std::time::Duration::from_millis(20));
+            }
         }
-        Ok(())
+        Err(Error::HardwareError("SMC write readback mismatch".into()))
     }
     /// Intel firmware-managed maximum. Never expose arbitrary key writes over IPC.
     pub fn set_stop(&self, stop: u8) -> Result<()> {

@@ -1,5 +1,8 @@
 use crate::*;
 
+/// Ticks (30 s each) to wait for requested charging to appear in the battery status.
+const UNOBSERVED_CHARGE_GRACE: u8 = 4;
+
 #[derive(Debug, Default, Clone)]
 pub struct Policy {
     pub config: Config,
@@ -9,6 +12,8 @@ pub struct Policy {
     /// Optional LED/idle-assertion errors must not release charging controls.
     pub auxiliary_error: Option<Error>,
     inhibited: bool,
+    /// Consecutive ticks that requested charging on AC without observing it.
+    unobserved_charge_ticks: u8,
     automatic_discharge_active: bool,
     calibration_clock: Option<(std::time::Instant, i64)>,
 }
@@ -508,9 +513,19 @@ impl Policy {
         // observed, not only requested: a battery that firmware refuses to charge
         // must not hold the system awake indefinitely.
         let observed_charging = charging && battery.state.eq_ignore_ascii_case("charging");
+        // The status read before the gate opened cannot show charging yet. A short
+        // grace keeps the assertion across that window, so a lid closed right
+        // after plugging in still charges, while a refusing battery is released.
+        let on_ac = battery.on_ac == Some(true);
+        if observed_charging || !charging || !on_ac {
+            self.unobserved_charge_ticks = 0;
+        } else {
+            self.unobserved_charge_ticks = self.unobserved_charge_ticks.saturating_add(1);
+        }
+        let starting = charging && on_ac && self.unobserved_charge_ticks <= UNOBSERVED_CHARGE_GRACE;
         let awake = self.config.care.prevent_sleep
-            && battery.on_ac == Some(true)
-            && (observed_charging || discharging);
+            && on_ac
+            && (observed_charging || starting || discharging);
         if caps.sleep_prevention.available() {
             match controller.prevent_sleep(awake) {
                 Ok(()) => self.runtime.sleep_prevented = awake,
@@ -663,9 +678,14 @@ mod tests {
         // Limit reached: the gate closes and the system may sleep again.
         p.tick(&mut f, &battery(80)).unwrap();
         assert!(!f.enabled && !f.awake);
-        // Below the resume threshold, but firmware does not charge: no assertion.
+        // The gate just reopened, so the status cannot show charging yet: the
+        // assertion holds for a short grace, then firmware refusing is released.
         let mut held = battery(60);
         held.state = "not charging".into();
+        for _ in 0..UNOBSERVED_CHARGE_GRACE {
+            p.tick(&mut f, &held).unwrap();
+            assert!(f.enabled && f.awake);
+        }
         p.tick(&mut f, &held).unwrap();
         assert!(f.enabled && !f.awake);
         // On battery power there is nothing to wait for.

@@ -117,7 +117,7 @@ fn run() -> Result<()> {
             }
             #[cfg(target_os = "macos")]
             Ok(Event::Power(PowerEvent::Sleep(ack))) => {
-                if let Err(e) = service.prepare_sleep() {
+                if let Err(e) = service.sleep_requested() {
                     tracing::error!(error=%e,"failed to prepare charging for sleep");
                 }
                 drop(ack);

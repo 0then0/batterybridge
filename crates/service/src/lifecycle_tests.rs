@@ -971,3 +971,18 @@ mod sysfs {
         assert_eq!(before, after, "a matching readback must skip the write");
     }
 }
+// An adapter connected just before the lid closes has not been seen by a tick yet.
+#[test]
+fn a_sleep_notice_reconciles_first_so_a_just_connected_adapter_keeps_charging() {
+    let mut rig = Rig::new(Kind::Gate, 54);
+    rig.limit(80);
+    rig.service.policy.config.care.prevent_sleep = true;
+    rig.service.platform.monitor = Box::new(OnBattery);
+    rig.service.tick();
+    assert!(!rig.hw.borrow().awake);
+    rig.service.platform.monitor = Box::new(Pct(rig.percent.clone()));
+    rig.service.sleep_requested().unwrap();
+    assert!(rig.service.holds_sleep());
+    let hw = rig.hw.borrow();
+    assert!(hw.awake && hw.gate_open, "{:?}", hw.ops);
+}
